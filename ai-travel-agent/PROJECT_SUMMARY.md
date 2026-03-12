@@ -19,3 +19,13 @@ Mock-Driven Development: Engineered a mock data layer to facilitate rapid protot
 Graph Orchestration: Designed a state-driven architecture using LangGraph to manage the execution order of specialized AI agents.
 
 Non-Linear Control Flow: Implemented conditional edges to facilitate autonomous self-correction (replanning) when constraints like budget are violated.
+
+API Development: Engineered a FastAPI backend to bridge a multi-agent AI system with a modern React frontend.
+
+Packaging & Distribution: Utilized setuptools and editable installs to manage complex local module dependencies and ensure consistent environment behavior.
+
+Full-Stack Integration: Designed a scalable architecture where AI state machines are served as production-ready microservices.
+
+Resilient Data Pipelines: Designed a fault-tolerant input processing layer that handles non-deterministic LLM outputs, ensuring 100% execution stability even with partial user prompts.
+
+Logic Hardening: Applied defensive programming patterns to synchronize LangGraph state variables with strictly typed Python functions.

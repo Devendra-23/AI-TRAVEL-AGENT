@@ -12,11 +12,10 @@ from agent.nodes import (
 )
 
 def build_graph() -> StateGraph:
-    """Build and return the compiled travel agent graph.""" [cite: 61]
-    # Initialize the graph with our custom TripState 
+    """Build and return the compiled travel agent graph."""
     graph = StateGraph(TripState)
 
-    # 1. Register every node 
+    # 1. Register every node
     graph.add_node('parse_input',        parse_input_node)
     graph.add_node('search_flights',     search_flights_node)
     graph.add_node('search_hotels',      search_hotels_node)
@@ -26,10 +25,10 @@ def build_graph() -> StateGraph:
     graph.add_node('budget_check',       budget_check_node)
     graph.add_node('compile_itinerary',  compile_itinerary_node)
 
-    # 2. Set entry point 
+    # 2. Set entry point
     graph.set_entry_point('parse_input')
 
-    # 3. Define sequential edges 
+    # 3. Define sequential edges
     graph.add_edge('parse_input',       'search_flights')
     graph.add_edge('search_flights',    'search_hotels')
     graph.add_edge('search_hotels',     'check_weather')
@@ -37,10 +36,9 @@ def build_graph() -> StateGraph:
     graph.add_edge('get_pois',          'planner')
     graph.add_edge('planner',           'budget_check')
 
-    # 4. Conditional edge: if over budget → re-plan; else → compile 
+    # 4. Conditional edge
     graph.add_conditional_edges(
         'budget_check',
-        # Logic: If 'within_budget' is True, move to final step; otherwise, go back to planner 
         lambda state: 'compile_itinerary' if state.get('within_budget', True) else 'planner',
         {
             'compile_itinerary': 'compile_itinerary',
@@ -48,7 +46,6 @@ def build_graph() -> StateGraph:
         }
     )
 
-    # 5. Connect last node to END 
     graph.add_edge('compile_itinerary', END)
 
     return graph.compile()

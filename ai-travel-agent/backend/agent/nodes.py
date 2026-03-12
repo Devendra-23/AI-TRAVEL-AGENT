@@ -1,18 +1,118 @@
-from langchain_google_genai import ChatGoogleGenerativeAI
+import json
 import os
-from dotenv import load_dotenv
+from langchain_google_genai import ChatGoogleGenerativeAI
+from agent.state import TripState
+from tools.flights import search_flights
+from tools.hotels import search_hotels
+from tools.weather import check_weather
+from tools.maps import get_pois
 
-load_dotenv()
-
-# Initialize Gemini (supports Tool Calling natively)
+# Initialize Gemini 3
 llm = ChatGoogleGenerativeAI(
-    model="gemini-1.5-flash", # or gemini-1.5-pro
-    google_api_key=os.getenv("GOOGLE_API_KEY"),
+    model="gemini-2.5-flash-lite", # 1,000 requests/day vs 20
     temperature=0
 )
+def clean_json_response(response_content):
+    """Helper to handle Gemini 3 list-type responses and strip markdown."""
+    content = response_content
+    # Handle list of parts if returned
+    if isinstance(content, list):
+        content = "".join([part if isinstance(part, str) else part.get("text", "") for part in content])
+    
+    # Clean up markdown code blocks
+    return content.replace('```json', '').replace('```', '').strip()
 
-# Example: Using Gemini in a Node
-def parse_input_node(state: TripState):
-    # Gemini uses the same .invoke() pattern as other LangChain models
-    response = llm.invoke(state['user_prompt'])
-    # ... logic to update state ...
+def parse_input_node(state: TripState) -> dict:
+    """Uses Gemini to extract structured data from user prompt."""
+    prompt = f"""
+    Extract travel details from this request: '{state['user_prompt']}'
+    Return ONLY a JSON object with these exact keys:
+    {{
+        "destination": "city name",
+        "origin_city": "assume 'New York' if not specified",
+        "duration_days": 3,
+        "budget_usd": 2000.0
+    }}
+    """
+    response = llm.invoke(prompt)
+    content = clean_json_response(response.content)
+    
+    try:
+        parsed = json.loads(content)
+    except Exception:
+        parsed = {}
+
+    # --- THE FIX: Safely extract values before converting ---
+    raw_budget = parsed.get('budget_usd')
+    # If it's None or missing, set to 2000.0; otherwise convert to float
+    safe_budget = float(raw_budget) if raw_budget is not None else 2000.0
+    
+    raw_days = parsed.get('duration_days')
+    safe_days = int(raw_days) if raw_days is not None else 3
+
+    return {
+        "destination": parsed.get('destination', 'Unknown'),
+        "origin_city": parsed.get('origin_city', 'New York'),
+        "duration_days": safe_days,
+        "budget_usd": safe_budget,
+        "current_step": "parse_input"
+    }
+
+def search_flights_node(state: TripState) -> dict:
+    flights = search_flights(state['origin_city'], state['destination'], state['duration_days'])
+    return {"flights": flights, "current_step": "search_flights"}
+
+def search_hotels_node(state: TripState) -> dict:
+    hotels = search_hotels(state['destination'], state['duration_days'])
+    return {"hotels": hotels, "current_step": "search_hotels"}
+
+def check_weather_node(state: TripState) -> dict:
+    weather = check_weather(state['destination'])
+    return {"weather": weather, "current_step": "check_weather"}
+
+def get_pois_node(state: TripState) -> dict:
+    pois = get_pois(state['destination'])
+    return {"pois": pois, "current_step": "get_pois"}
+
+def planner_node(state: TripState) -> dict:
+    # ADD THIS LINE so you know it's working
+    print(f"🤖 Gemini is crafting your itinerary for {state['destination']}... (this may take a moment)")
+
+    system_prompt = "You are a travel planning expert. Build a JSON itinerary based on provided data."
+    
+    user_msg = f"""
+    Plan a {state['duration_days']}-day trip to {state['destination']}.
+    Budget: ${state['budget_usd']}
+    Flights: {json.dumps(state['flights'][:3])}
+    Hotels: {json.dumps(state['hotels'][:3])}
+    Weather: {json.dumps(state['weather'])}
+    Attractions: {json.dumps(state['pois'])}
+
+    Return JSON with this structure:
+    {{
+      "selected_flight_index": 0,
+      "selected_hotel_index": 0,
+      "days": [
+        {{ "day": 1, "theme": "...", "activities": [{{ "time": "09:00", "name": "...", "cost_usd": 0 }}] }}
+      ]
+    }}
+    """
+    
+    response = llm.invoke([("system", system_prompt), ("user", user_msg)])
+    # FIX: Use the cleaning helper here too
+    content = clean_json_response(response.content)
+    plan = json.loads(content)
+    
+    return {
+        "itinerary": plan,
+        "selected_flight": state['flights'][plan.get('selected_flight_index', 0)],
+        "selected_hotel": state['hotels'][plan.get('selected_hotel_index', 0)],
+        "current_step": "planner"
+    }
+
+def budget_check_node(state: TripState) -> dict:
+    from utils.budget import calculate_total_cost
+    return calculate_total_cost(state)
+
+def compile_itinerary_node(state: TripState) -> dict:
+    return {"current_step": "compile_itinerary"}

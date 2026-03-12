@@ -1,4 +1,4 @@
-# agent/state.py 
+# backend/agent/state.py
 from typing import TypedDict, Optional, List, Dict, Any
 
 class TripState(TypedDict):
@@ -16,3 +16,4 @@ class TripState(TypedDict):
     itinerary: Optional[Dict]
     within_budget: bool
     current_step: str
+    messages: List[Dict] # Added for Gemini conversation history
