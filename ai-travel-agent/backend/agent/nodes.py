@@ -12,14 +12,25 @@ llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash-lite", # 1,000 requests/day vs 20
     temperature=0
 )
+
+
 def clean_json_response(response_content):
-    """Helper to handle Gemini 3 list-type responses and strip markdown."""
+    """Helper to handle Gemini list-type responses and strip conversational text."""
     content = response_content
+    
     # Handle list of parts if returned
     if isinstance(content, list):
         content = "".join([part if isinstance(part, str) else part.get("text", "") for part in content])
     
-    # Clean up markdown code blocks
+    # THE FIX: Find the first '{' and the last '}' to strip conversational filler
+    start_idx = content.find('{')
+    end_idx = content.rfind('}')
+    
+    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+        # Extract strictly what is between the braces
+        return content[start_idx:end_idx + 1]
+    
+    # Fallback just in case
     return content.replace('```json', '').replace('```', '').strip()
 
 def parse_input_node(state: TripState) -> dict:
@@ -75,10 +86,9 @@ def get_pois_node(state: TripState) -> dict:
     return {"pois": pois, "current_step": "get_pois"}
 
 def planner_node(state: TripState) -> dict:
-    # ADD THIS LINE so you know it's working
     print(f"🤖 Gemini is crafting your itinerary for {state['destination']}... (this may take a moment)")
 
-    system_prompt = "You are a travel planning expert. Build a JSON itinerary based on provided data."
+    system_prompt = "You are a travel planning expert. Build a JSON itinerary based on provided data. Output strictly JSON and absolutely no other text."
     
     user_msg = f"""
     Plan a {state['duration_days']}-day trip to {state['destination']}.
@@ -88,7 +98,7 @@ def planner_node(state: TripState) -> dict:
     Weather: {json.dumps(state['weather'])}
     Attractions: {json.dumps(state['pois'])}
 
-    Return JSON with this structure:
+    Return JSON with this exact structure:
     {{
       "selected_flight_index": 0,
       "selected_hotel_index": 0,
@@ -99,17 +109,26 @@ def planner_node(state: TripState) -> dict:
     """
     
     response = llm.invoke([("system", system_prompt), ("user", user_msg)])
-    # FIX: Use the cleaning helper here too
     content = clean_json_response(response.content)
-    plan = json.loads(content)
+    
+    # THE FIX: Add a try/except block so a bad JSON string doesn't crash the server
+    try:
+        plan = json.loads(content)
+    except Exception as e:
+        print(f"⚠️ JSON Parsing Failed! Raw LLM Output: {content}")
+        # Provide a safe fallback so the frontend still receives data
+        plan = {
+            "selected_flight_index": 0,
+            "selected_hotel_index": 0,
+            "days": []
+        }
     
     return {
         "itinerary": plan,
-        "selected_flight": state['flights'][plan.get('selected_flight_index', 0)],
-        "selected_hotel": state['hotels'][plan.get('selected_hotel_index', 0)],
+        "selected_flight": state['flights'][plan.get('selected_flight_index', 0)] if state['flights'] else None,
+        "selected_hotel": state['hotels'][plan.get('selected_hotel_index', 0)] if state['hotels'] else None,
         "current_step": "planner"
     }
-
 def budget_check_node(state: TripState) -> dict:
     from utils.budget import calculate_total_cost
     return calculate_total_cost(state)
