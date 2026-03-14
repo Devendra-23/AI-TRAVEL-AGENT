@@ -9,7 +9,7 @@ from tools.maps import get_pois
 
 # Initialize Gemini 3
 llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash-lite", # 1,000 requests/day vs 20
+    model="gemini-2.5-flash", # 1,000 requests/day vs 20
     temperature=0
 )
 
@@ -32,15 +32,18 @@ def clean_json_response(response_content):
     
     # Fallback just in case
     return content.replace('```json', '').replace('```', '').strip()
-
 def parse_input_node(state: TripState) -> dict:
-    """Uses Gemini to extract structured data from user prompt."""
+    """Uses Gemini to extract structured data and GPS coordinates from user prompt."""
     prompt = f"""
     Extract travel details from this request: '{state['user_prompt']}'
-    Return ONLY a JSON object with these exact keys:
+    Return ONLY a JSON object with these exact keys. Provide rough GPS coordinates for BOTH the origin and destination.
     {{
-        "destination": "city name",
-        "origin_city": "assume 'New York' if not specified",
+        "destination": "city or country name",
+        "destination_lat": 48.8566,
+        "destination_lng": 2.3522,
+        "origin_city": "city name",
+        "origin_lat": 40.7128,    # <-- Gemini needs to see these in the example!
+        "origin_lng": -74.0060,   # <-- Gemini needs to see these in the example!
         "duration_days": 3,
         "budget_usd": 2000.0
     }}
@@ -53,19 +56,34 @@ def parse_input_node(state: TripState) -> dict:
     except Exception:
         parsed = {}
 
-    # --- THE FIX: Safely extract values before converting ---
+    # Safely extract values before converting
     raw_budget = parsed.get('budget_usd')
-    # If it's None or missing, set to 2000.0; otherwise convert to float
     safe_budget = float(raw_budget) if raw_budget is not None else 2000.0
     
     raw_days = parsed.get('duration_days')
     safe_days = int(raw_days) if raw_days is not None else 3
+
+    # Safely extract DESTINATION coordinates
+    raw_lat = parsed.get('destination_lat')
+    safe_lat = float(raw_lat) if raw_lat is not None else 0.0
+    raw_lng = parsed.get('destination_lng')
+    safe_lng = float(raw_lng) if raw_lng is not None else 0.0
+
+    # Safely extract ORIGIN coordinates
+    raw_o_lat = parsed.get('origin_lat')
+    safe_o_lat = float(raw_o_lat) if raw_o_lat is not None else 0.0
+    raw_o_lng = parsed.get('origin_lng')
+    safe_o_lng = float(raw_o_lng) if raw_o_lng is not None else 0.0
 
     return {
         "destination": parsed.get('destination', 'Unknown'),
         "origin_city": parsed.get('origin_city', 'New York'),
         "duration_days": safe_days,
         "budget_usd": safe_budget,
+        "destination_lat": safe_lat,
+        "destination_lng": safe_lng,
+        "origin_lat": safe_o_lat,
+        "origin_lng": safe_o_lng,
         "current_step": "parse_input"
     }
 

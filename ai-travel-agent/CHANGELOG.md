@@ -62,3 +62,34 @@ All notable changes to the **Amazing AI Travel Agent** project will be documente
 ### Fixed
 
 - **CSS Architecture**: Resolved complex z-index stacking context anomalies by implementing CSS `isolate` on the parent container, preventing the 3D canvas from bleeding behind the global background.
+
+## [2026-03-14]
+
+### Added
+
+- **Takeoff Loading Animation**: Added a custom SVG airplane animation to the submit button to improve perceived performance during LangGraph node execution.
+- **Boarding Pass Timeline UI**: Implemented a responsive vertical timeline to display the day-by-day AI generated itinerary, including conditional badges for paid vs. free activities.
+- **Dynamic Globe Targeting**: Integrated GPS coordinate parsing into the Gemini `parse_input_node`. The frontend `<TravelGlobe />` now dynamically receives `lat` and `lng` props, calculating `phi` and `theta` to auto-rotate and drop a marker on the exact destination.
+
+### Changed
+
+- **UX Placeholder Text**: Updated the search input placeholder to implicitly train users to provide an "origin city" (e.g., "from London"), improving the accuracy of the flight-search tool.
+
+Added
+Dynamic Dual-Point Geolocation: The AI agent now extracts GPS coordinates for both the Origin and Destination cities.
+
+Multi-Marker 3D Globe: Updated the WebGL hero section to render multiple glowing markers simultaneously, visualizing the flight path from departure to arrival.
+
+Split-Input UX: Redesigned the search bar to include explicit "Leaving from" and "Destination" fields, significantly improving intent extraction accuracy.
+
+GPS Safety Layer: Implemented a JavaScript defensive layer to parse AI-generated strings into valid floats, preventing WebGL "NaN" rendering crashes.
+
+Changed
+LLM Model Upgrade: Switched from gemini-2.5-flash-lite to gemini-2.5-flash to increase API rate limits and improve geographic reasoning.
+
+State Schema Expansion: Updated the LangGraph TripState and FastAPI initial_state to support persistent storage of spatial coordinates.
+
+Fixed
+Fixed a 500 Internal Server Error caused by missing coordinate keys in the initial state dictionary.
+
+Resolved a "NaN" crash in the 3D globe component where missing coordinates caused the WebGL canvas to go blank.

@@ -45,3 +45,16 @@ Product Marketing Integration: Aligned technical AI capabilities with psychologi
 - **3D UI Engineering**: Integrated an interactive WebGL globe (`cobe`) into the React hero section, optimizing rendering performance and establishing a strong visual hierarchy.
 - **Advanced CSS Architecture**: Diagnosed and resolved complex z-index stacking context anomalies by implementing CSS `isolate` to explicitly manage layout boundaries and prevent canvas bleed.
 - **Responsive Canvas Management**: Engineered fluid cross-device visibility for a canvas-based animation, replacing aggressive display toggles with responsive opacity scaling to preserve the WebGL drawing context on mobile viewports.
+
+- **Micro-Interaction Engineering**: Replaced standard loading states with a custom CSS keyframe "Takeoff" animation (`@keyframes fly`), transforming a 5-second API wait time into an engaging visual event.
+- **Dynamic 3D State Management**: Engineered a React `useEffect` hook to calculate mathematical coordinate conversions (Latitude/Longitude to Phi/Theta), allowing the `cobe` WebGL globe to autonomously rotate and drop a glowing marker exactly on the AI-generated travel destination.
+- **Data Visualization UI**: Architected a "Boarding Pass" style timeline UI using Tailwind CSS to render complex nested JSON (daily arrays and activity lists) into an intuitive, visually appealing day-by-day traveler schedule.
+
+🚀 Technical Core
+Agentic Orchestration: Uses a Directed Acyclic Graph (DAG) via LangGraph to manage the trip-planning lifecycle (Input Parsing -> Research -> Planning -> Budget Audit).
+
+3D Spatial Visualization: A custom WebGL globe rendered with cobe that dynamically responds to LLM-extracted GPS coordinates.
+
+Contextual NLP: Implements a dual-input "Split-Input" UI that allows users to define origin and destination separately, which are then stitched for high-precision LLM intent extraction.
+
+Financial Integrity: Includes a specialized Euro-Audit node that calculates real-time costs and verifies the feasibility of the plan against user-defined budget constraints.

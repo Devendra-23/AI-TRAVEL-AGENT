@@ -27,6 +27,15 @@ def create_initial_state(user_prompt: str) -> dict:
         'origin_city': '',
         'duration_days': 0,
         'budget_usd': 0.0,
+        
+        # --- THE FIX: Add the default GPS coordinates! ---
+        'destination_lat': 0.0,
+        'destination_lng': 0.0,
+        # -------------------------------------------------
+        # Add these right under 'destination_lng': 0.0,
+        'origin_lat': 0.0,
+        'origin_lng': 0.0,
+
         'flights': [],
         'hotels': [],
         'weather': [],

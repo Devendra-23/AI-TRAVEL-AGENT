@@ -1,4 +1,5 @@
 import os
+import traceback # <-- NEW: We need this to print the error!
 from dotenv import load_dotenv
 
 # MUST be the first thing that happens
@@ -43,7 +44,12 @@ async def plan_trip(request: TravelRequest):
         return result
         
     except Exception as e:
-        # Provides the frontend with a clear error message if the LLM fails
+        # --- NEW: Print the exact error to the terminal! ---
+        print("\n" + "="*50)
+        print("💥 CRASH DETECTED! Here is the exact error:")
+        traceback.print_exc()
+        print("="*50 + "\n")
+        # ---------------------------------------------------
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
