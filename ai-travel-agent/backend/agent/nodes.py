@@ -6,10 +6,20 @@ from tools.flights import search_flights
 from tools.hotels import search_hotels
 from tools.weather import check_weather
 from tools.maps import get_pois
+from dotenv import load_dotenv
 
+# 1. FORCE LOAD THE ENV
+load_dotenv()
+
+# 2. GET THE KEY MANUALLY
+api_key = os.getenv("GOOGLE_API_KEY")
+
+
+# 3. INITIALIZE WITH EXPLICIT KEY
 # Initialize Gemini 3
 llm = ChatGoogleGenerativeAI(
     model="gemini-2.5-flash", # 1,000 requests/day vs 20
+    google_api_key=api_key,
     temperature=0
 )
 
