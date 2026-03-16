@@ -58,3 +58,19 @@ Agentic Orchestration: Uses a Directed Acyclic Graph (DAG) via LangGraph to mana
 Contextual NLP: Implements a dual-input "Split-Input" UI that allows users to define origin and destination separately, which are then stitched for high-precision LLM intent extraction.
 
 Financial Integrity: Includes a specialized Euro-Audit node that calculates real-time costs and verifies the feasibility of the plan against user-defined budget constraints.
+
+March 15th: Visual & UX Foundation
+3D Globe Integration: We successfully embedded the cobe WebGL globe. We engineered the useEffect hooks to translate AI-generated Latitude/Longitude into 3D coordinates, allowing the globe to rotate and mark destinations dynamically.
+
+"Boarding Pass" Timeline: Built the front-end UI to parse the complex nested JSON from the AI into a readable, day-by-day traveler schedule.
+
+Micro-Interaction Polish: Replaced static loading states with a custom airport-style "Departure Board" and airplane takeoff animations to manage user expectations during LLM processing.
+
+🚀 March 16th: Dynamic Scenery & Quota Hardening
+Instant Pre-fetch Logic (The "Eyes"): We implemented a regex-based "City Sniffer" in the React frontend. This scans the user's prompt (e.g., "Sweden") and immediately fetches high-resolution travel photography from the Unsplash API. This solved the "white screen" wait time by giving instant visual feedback while the AI "thought" in the background.
+
+API Security Sync: We resolved a critical 401 Unauthorized issue by properly prefixing environment variables with VITE\_ and correctly placing .env files in separate frontend/backend directories to ensure Vite could "see" the keys.
+
+Rate-Limit Engineering: After hitting 429 RESOURCE_EXHAUSTED errors with the Gemini 2.5 Pro model, we implemented a Hybrid Model Strategy. We switched to gemini-1.5-flash and gemini-2.5-flash-lite for development testing to take advantage of higher free-tier quotas.
+
+Backend Resilience: Fixed several 404 NOT_FOUND crashes by correcting model-name mapping strings (e.g., adding -latest suffixes) to match the current Google GenAI SDK requirements.

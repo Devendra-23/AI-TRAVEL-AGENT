@@ -93,3 +93,13 @@ Fixed
 Fixed a 500 Internal Server Error caused by missing coordinate keys in the initial state dictionary.
 
 Resolved a "NaN" crash in the 3D globe component where missing coordinates caused the WebGL canvas to go blank.
+
+[[2026-03-16]] - Dynamic Backgrounds & Quota Hardening
+Added
+Instant Pre-fetch Logic: Implemented a regex-based "City Sniffer" in the frontend to detect destination intent (e.g., "in Sweden", "to Italy") before the AI backend responds.
+
+Dynamic Scenery Backdrops: Integrated the Unsplash API to fetch high-resolution, contextually relevant landscape photography based on the identified destination.
+
+Environment Sync: Separated .env architectures for Frontend (Vite) and Backend (FastAPI) to resolve cross-origin key injection issues.
+
+Console Audit Logs: Added high-visibility debug logs (📸, ✅, ❌) to track API handshakes and asset loading in real-time.

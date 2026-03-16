@@ -59,7 +59,7 @@ function DepartureBoard() {
   );
 }
 
-// --- GLOBE COMPONENT (Hardened) ---
+// --- GLOBE COMPONENT ---
 function TravelGlobe({
   lat,
   lng,
@@ -72,17 +72,13 @@ function TravelGlobe({
   originLng?: any;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
   useEffect(() => {
     if (!canvasRef.current) return;
-
     const numLat = parseFloat(lat) || 0;
     const numLng = parseFloat(lng) || 0;
     const numOLat = parseFloat(originLat) || 0;
     const numOLng = parseFloat(originLng) || 0;
-
     const hasDest = numLat !== 0 || numLng !== 0;
-
     let phi = 0;
     let theta = 0.3;
 
@@ -117,7 +113,6 @@ function TravelGlobe({
         }
       },
     });
-
     return () => globe.destroy();
   }, [lat, lng, originLat, originLng]);
 
@@ -146,8 +141,41 @@ export default function App() {
     "https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?q=80&w=2021&auto=format&fit=crop"
   );
 
+  // --- HELPER: UPDATED FETCH IMAGE LOGIC ---
+  const updateBackground = async (query: string) => {
+    const accessKey = import.meta.env.VITE_UNSPLASH_ACCESS_KEY;
+    if (!accessKey) return;
+
+    console.log("📸 Calling Unsplash for:", query);
+    try {
+      const res = await fetch(
+        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(
+          query
+        )}%20scenery%20travel&orientation=landscape&client_id=${accessKey}`
+      );
+      const data = await res.json();
+      if (data.results && data.results.length > 0) {
+        const newImg = data.results[0].urls.regular;
+        setBgImage(newImg);
+        console.log("✅ Success! Background set to:", newImg);
+      }
+    } catch (err) {
+      console.error("❌ Unsplash Error:", err);
+    }
+  };
+
   const handlePlanTrip = async () => {
     if (!prompt) return;
+
+    // --- INSTANT PRE-FETCH LOGIC ---
+    // Scans prompt for "in [Location]" or "to [Location]"
+    const match = prompt.match(/(?:in|to|visit)\s+([a-zA-Z\s]+)/i);
+    const suspectedCity = match ? match[1].trim() : prompt.split(" ").pop();
+
+    if (suspectedCity) {
+      updateBackground(suspectedCity);
+    }
+
     setLoading(true);
     setError(null);
     setItinerary(null);
@@ -164,57 +192,35 @@ export default function App() {
       const data = await response.json();
       setItinerary(data);
 
-      // --- THE IMAGE FETCH FIX ---
-      // We check both data.destination AND data.itinerary.destination just in case
-      const cityName = data.destination || data.itinerary?.destination;
-
-      console.log("🏙️ AI identified destination as:", cityName);
-
-      if (cityName && cityName !== "Unknown") {
-        const accessKey = import.meta.env.VITE_UNSPLASH_ACCESS_KEY;
-
-        // We add 'landscape' and 'travel' to the query to get the best results
-        const imgRes = await fetch(
-          `https://api.unsplash.com/search/photos?query=${encodeURIComponent(
-            cityName
-          )}%20scenery%20travel&orientation=landscape&client_id=${accessKey}`
-        );
-        const imgData = await imgRes.json();
-
-        if (imgData.results && imgData.results.length > 0) {
-          const newUrl = imgData.results[0].urls.regular;
-          console.log("📸 Success! Changing background to:", newUrl);
-          setBgImage(newUrl);
-        } else {
-          console.warn("⚠️ Unsplash found no photos for:", cityName);
-        }
+      // --- AI REFINEMENT ---
+      const aiCity = data.destination || data.itinerary?.destination;
+      if (aiCity && aiCity !== "Unknown") {
+        updateBackground(aiCity);
       }
-    } catch (err) {
-      console.error("❌ Plan Trip Error:", err);
-      setError("AI agent snag. Check backend.");
+    } catch (err: any) {
+      setError("AI agent hit a snag. Check backend terminal for quota errors.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    // FIX: Removed bg-[#030712] here so background image is visible
     <div className="relative min-h-screen w-full text-white font-sans overflow-x-hidden pb-32">
-      {/* 1. DYNAMIC BACKGROUND IMAGE (Behind everything) */}
+      {/* 1. DYNAMIC BACKGROUND IMAGE LAYER */}
       <div className="fixed inset-0 -z-50 bg-[#030712]">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#030712]/70 to-[#030712] z-10" />
         <img
-          key={bgImage}
+          key={bgImage} // CRITICAL: Forces React to re-render when the state changes
           src={bgImage}
           className="w-full h-full object-cover opacity-60 transition-all duration-1000 scale-105"
-          alt="Backdrop"
+          alt="Destination Backdrop"
         />
       </div>
 
-      {/* 2. PATTERN OVERLAY */}
+      {/* 2. RADIAL PATTERN OVERLAY */}
       <div className="fixed inset-0 -z-40 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] opacity-20 pointer-events-none" />
 
-      {/* 3. LOADING OVERLAY */}
+      {/* 3. LOADING BOARD OVERLAY */}
       {loading && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#030712]/95 backdrop-blur-xl">
           <div className="relative">
@@ -224,7 +230,7 @@ export default function App() {
         </div>
       )}
 
-      {/* --- GLOBE (Nuclear Positioning Fix) --- */}
+      {/* --- GLOBE POSITIONING --- */}
       <div className="fixed top-1/2 right-[-10%] md:right-[0%] -translate-y-1/2 w-[600px] h-[600px] md:w-[800px] md:h-[800px] pointer-events-none -z-10 opacity-80 transition-all duration-1000 flex items-center justify-center">
         <TravelGlobe
           lat={itinerary?.destination_lat}
@@ -257,7 +263,7 @@ export default function App() {
           </p>
         </div>
 
-        {/* Search Section */}
+        {/* SEARCH SECTION */}
         <div className="max-w-3xl mb-16 relative group">
           <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-[#39D39F] rounded-3xl blur opacity-25" />
           <div className="relative flex flex-col md:flex-row bg-slate-900/90 backdrop-blur-3xl p-2 rounded-3xl border border-white/10 shadow-2xl md:divide-x divide-white/10">
@@ -274,7 +280,7 @@ export default function App() {
               <GlobeIcon size={20} className="text-[#39D39F] mr-3" />
               <input
                 className="w-full bg-transparent outline-none text-white placeholder:text-slate-500"
-                placeholder="5 days in Tokyo under €2500"
+                placeholder="5 days in Italy under €2500"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handlePlanTrip()}
@@ -293,35 +299,33 @@ export default function App() {
           )}
         </div>
 
-        {/* Results Section */}
         {itinerary && (
           <div className="max-w-4xl animate-in fade-in slide-in-from-bottom-10 duration-700">
             <div className="inline-flex items-center gap-2 px-6 py-2 rounded-full bg-blue-500/20 border border-blue-500/40 text-blue-300 font-bold text-sm uppercase mb-8 shadow-xl backdrop-blur-md">
               <MapPin size={16} /> {itinerary.destination}
             </div>
 
+            {/* CARDS */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
               <div className="p-8 rounded-[2.5rem] bg-slate-900/60 backdrop-blur-2xl border border-white/10 shadow-2xl">
                 <Plane className="text-blue-400 mb-4" size={32} />
                 <h3 className="text-slate-500 uppercase text-[10px] font-black tracking-[0.2em] mb-1">
-                  Inbound Flight
+                  Flight Price
                 </h3>
                 <h4 className="font-bold text-xl mb-2 text-white">
-                  {itinerary.selected_flight?.airline ||
-                    "Flight Research Completed"}
+                  {itinerary.selected_flight?.airline || "Flight Details"}
                 </h4>
                 <p className="text-4xl font-black text-white">
                   ${itinerary.selected_flight?.price_usd || "0"}
                 </p>
               </div>
-
               <div className="p-8 rounded-[2.5rem] bg-slate-900/60 backdrop-blur-2xl border border-white/10 shadow-2xl">
                 <Bed className="text-[#39D39F] mb-4" size={32} />
                 <h3 className="text-slate-500 uppercase text-[10px] font-black tracking-[0.2em] mb-1">
-                  Recommended Stay
+                  Accommodation
                 </h3>
                 <h4 className="font-bold text-xl mb-2 text-white">
-                  {itinerary.selected_hotel?.name || "Curated Accommodation"}
+                  {itinerary.selected_hotel?.name || "Stay Details"}
                 </h4>
                 <p className="text-4xl font-black text-white">
                   ${itinerary.selected_hotel?.price_per_night_usd || "0"}
@@ -332,6 +336,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* TIMELINE */}
             <div className="mt-12 space-y-12">
               <h3 className="text-3xl font-black tracking-tight mb-8 border-b border-white/10 pb-4 italic">
                 The Itinerary
@@ -354,7 +359,7 @@ export default function App() {
                     {day.activities.map((act: any, j: number) => (
                       <div
                         key={j}
-                        className="bg-white/5 border border-white/5 p-5 rounded-3xl flex items-center justify-between hover:bg-white/10 transition-all border-l-4 border-l-transparent hover:border-l-blue-500"
+                        className="bg-white/5 border border-white/5 p-5 rounded-3xl flex items-center justify-between hover:bg-white/10 transition-all"
                       >
                         <div className="flex items-center gap-5">
                           <div className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-500 shadow-inner">
@@ -381,7 +386,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Feature Cards (Initial View) */}
+        {/* STATIC FEATURE CARDS */}
         {!itinerary && !loading && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl">
             <div className="p-10 rounded-[3rem] bg-white/5 backdrop-blur-xl border border-white/10 hover:bg-white/10 transition-all">
