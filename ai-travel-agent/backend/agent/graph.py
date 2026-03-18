@@ -8,6 +8,7 @@ from agent.nodes import (
     get_pois_node,
     planner_node,
     budget_check_node,
+    search_flights_node,
     compile_itinerary_node,
 )
 

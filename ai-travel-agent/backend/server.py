@@ -1,8 +1,9 @@
 import os
-import traceback # <-- NEW: We need this to print the error!
+import traceback
+from pathlib import Path
 from dotenv import load_dotenv
 
-# MUST be the first thing that happens
+# 1. Load Environment Variables
 load_dotenv() 
 
 import uvicorn
@@ -10,13 +11,12 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# Now these imports will have access to the GOOGLE_API_KEY
+# 2. These imports need the environment variables loaded first
 from agent.graph import build_graph
-from main import create_initial_state
 
+# 3. INITIALIZE THE APP (Must happen before @app.post)
 app = FastAPI(title="Gemini Travel Agent API")
 
-# Allow your React app (Vite usually runs on port 5173) to talk to this server
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -28,28 +28,43 @@ app.add_middleware(
 class TravelRequest(BaseModel):
     prompt: str
 
+# 4. DEFINE ROUTES
 @app.post("/plan")
-async def plan_trip(request: TravelRequest):
+async def plan_trip(request: dict): # Use dict to capture all fields
     try:
-        # 1. Build the LangGraph state machine
+        # 1. Extract EVERYTHING from the request body
+        prompt = request.get("prompt")
+        start = request.get("start_date")
+        end = request.get("end_date")
+        t_type = request.get("trip_type", "round-trip")
+
         graph = build_graph() 
         
-        # 2. Initialize the state using the prompt from the frontend
-        initial_state = create_initial_state(request.prompt) 
+        initial_state = {
+            "user_prompt": prompt,
+            "current_step": "start",
+            "origin_iata": None,
+            "destination_iata": None,
+            "start_date": start, # Now properly passed
+            "end_date": end,     # Now properly passed
+            "trip_type": t_type,
+            "destination_lat": 0.0,
+            "destination_lng": 0.0,
+            "origin_lat": 0.0,
+            "origin_lng": 0.0,
+            "flights": [],
+            "hotels": [],
+            "pois": []
+        }
         
-        # 3. Invoke the graph (this triggers the LLM and tools)
         result = graph.invoke(initial_state) 
-        
-        # 4. Return the full state (itinerary, weather, etc.) as JSON
         return result
         
     except Exception as e:
-        # --- NEW: Print the exact error to the terminal! ---
         print("\n" + "="*50)
-        print("💥 CRASH DETECTED! Here is the exact error:")
+        print("💥 CRASH DETECTED!")
         traceback.print_exc()
         print("="*50 + "\n")
-        # ---------------------------------------------------
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
