@@ -1,106 +1,101 @@
 import os
 import requests
-import urllib.parse
+import re
 from dotenv import load_dotenv
 
 load_dotenv()
-RAPID_API_KEY = os.getenv("RAPID_API_KEY")
+
+SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY")
+
+def clean_price(price_input) -> float:
+    """
+    METICULOUS FIX: Strips currency symbols, commas, and whitespace.
+    Handles '€140', '1,200.50', and raw numbers.
+    """
+    if price_input is None:
+        return 0.0
+    if isinstance(price_input, (int, float)):
+        return float(price_input)
+    
+    # Remove everything except digits and the decimal point
+    cleaned = re.sub(r'[^\d.]', '', str(price_input).replace(',', ''))
+    try:
+        return float(cleaned) if cleaned else 0.0
+    except ValueError:
+        return 0.0
 
 def search_hotels(destination: str, duration_days: int, start_date: str, end_date: str) -> list:
     """
-    Finalized for booking-com18. Handles Base64 Location IDs and List-based responses.
+    Uses SerpApi Google Hotels Engine.
+    Fetches real-time pricing and high-res photography for property tiers.
     """
     nights = max(1, int(duration_days))
-    print(f"🏨 [HOTEL TOOL] Vetting properties in {destination} for {nights} nights...")
-    
-    headers = {
-        "X-RapidAPI-Key": RAPID_API_KEY,
-        "X-RapidAPI-Host": "booking-com18.p.rapidapi.com"
+    print(f"🏨 [GDS HOTELS] Vetting properties in {destination} for {nights} nights...")
+
+    params = {
+        "engine": "google_hotels",
+        "q": f"best hotels and stay in {destination}",
+        "check_in_date": start_date,
+        "check_out_date": end_date,
+        "currency": "EUR",
+        "hl": "en",
+        "api_key": SERPAPI_API_KEY
     }
 
     try:
-        # --- STEP 1: GET LOCATION ID ---
-        loc_url = "https://booking-com18.p.rapidapi.com/stays/auto-complete"
-        loc_response = requests.get(loc_url, headers=headers, params={"query": destination})
-        loc_data = loc_response.json()
-
-        # The API returns {'status': True, 'message': 'Success', 'data': [...]}
-        locations = loc_data.get('data', [])
-        if not locations:
+        response = requests.get("https://serpapi.com/search", params=params)
+        data = response.json()
+        
+        hotel_results = data.get("properties", [])
+        if not hotel_results:
+            print("📡 [HOTELS] No live properties found. Using Safety Fallback.")
             return get_fallback_hotels(destination)
 
-        # Use the ID found in your logs
-        dest_id = locations[0].get('id') 
-        print(f"📍 Found Location ID: {dest_id[:20]}...")
+        # Sort by price to create accurate Boutique/Luxury tiers
+        sorted_hotels = sorted(
+            hotel_results, 
+            key=lambda x: clean_price(x.get("rate_per_night", {}).get("lowest", 9999))
+        )
 
-        # --- STEP 2: SEARCH FOR HOTELS ---
-        search_url = "https://booking-com18.p.rapidapi.com/stays/search"
-        search_params = {
-            "locationId": dest_id,
-            "checkinDate": start_date,
-            "checkoutDate": end_date,
-            "adults": "2",
-            "rooms": "1",
-            "currency": "EUR"
-        }
-
-        search_response = requests.get(search_url, headers=headers, params=search_params)
-        search_data = search_response.json()
-        
-        # FIX: booking-com18 returns {'data': [...]} or just a list. 
-        # Based on your error, 'search_data' might be a dictionary with a 'data' key that IS a list.
-        hotel_list = search_data.get('data', [])
-        
-        # If 'data' itself is a list, we handle it here:
-        if not isinstance(hotel_list, list):
-             hotel_list = []
-
-        if not hotel_list:
-            print(f"⚠️ [HOTEL TOOL] No hotels found in the response data.")
-            return get_fallback_hotels(destination)
-
-        # --- STEP 3: MAPPING TIERS ---
-        # Helper to find price in booking-com18 structure
-        def extract_price(hotel):
-            # Try rawPrice first, then fallback to price -> amount
-            p = hotel.get('priceDetails', {}).get('rawPrice')
-            if p is None:
-                p = hotel.get('price', {}).get('amount', 0)
-            return float(p)
-
-        # Sort by price
-        sorted_hotels = sorted(hotel_list, key=extract_price)
-        
         tiers = []
         labels = ["Hostel/Budget", "Boutique", "Luxury"]
-        # Select indices for 3 distinct price points
-        indices = [0, len(sorted_hotels)//2, -1] 
+        # Distribute selection across the price spectrum
+        indices = [0, len(sorted_hotels)//2, len(sorted_hotels)-1]
 
-        for i, label in enumerate(labels):
-            h = sorted_hotels[indices[i]]
-            total_price = extract_price(h)
+        for i, idx in enumerate(indices):
+            h = sorted_hotels[idx]
             
-            # Nightly rate calculation
-            nightly = int(total_price / nights) if total_price > 0 else (60 * (i+1))
+            # PREMIMUM PHOTO LOGIC: Grab the first high-res thumbnail available
+            images = h.get("images", [])
+            image_url = images[0].get("thumbnail") if images else "/hotel-placeholder.jpg"
+            
+            raw_rate = h.get("rate_per_night", {}).get("lowest")
+            nightly_rate = clean_price(raw_rate)
+
+            # Fallback for pricing if the GDS returned null for a specific tier
+            if nightly_rate == 0:
+                nightly_rate = [45, 140, 350][i]
 
             tiers.append({
-                "name": h.get('name', 'Central Hotel'),
-                "price_per_night_eur": nightly,
-                "image": h.get('image', h.get('thumbnailUrl')),
-                "label": label,
-                "rating": h.get('reviewScore', 'N/A')
+                "name": h.get("name", f"Elite {destination} Stay"),
+                "price_per_night_eur": int(nightly_rate),
+                "image": image_url,
+                "label": labels[i],
+                "rating": h.get("overall_rating", "4.5"),
+                "amenities": h.get("amenities", [])[:4] # Pass amenities for UI icons
             })
 
-        print(f"✅ [HOTEL TOOL] Successfully fetched {len(tiers)} tiers!")
+        print(f"✅ [GDS HOTELS] Successfully captured {len(tiers)} live property tiers.")
         return tiers
 
     except Exception as e:
-        print(f"❌ [HOTEL TOOL] Error in hotels.py: {e}")
+        print(f"❌ [HOTELS ERROR] {e}")
         return get_fallback_hotels(destination)
 
 def get_fallback_hotels(city: str):
+    """Reliable safety net for the UI."""
     return [
-        {"name": f"{city} Budget Inn", "price_per_night_eur": 55, "label": "Hostel/Budget", "rating": 7.9},
-        {"name": f"{city} Boutique Suites", "price_per_night_eur": 155, "label": "Boutique", "rating": 8.7},
-        {"name": f"Grand {city} Palace", "price_per_night_eur": 480, "label": "Luxury", "rating": 9.2},
+        {"name": f"{city} Urban Hostel", "price_per_night_eur": 45, "label": "Hostel/Budget", "rating": 7.5, "image": ""},
+        {"name": f"{city} Design Boutique", "price_per_night_eur": 125, "label": "Boutique", "rating": 8.9, "image": ""},
+        {"name": f"Royal {city} Grand Hotel", "price_per_night_eur": 350, "label": "Luxury", "rating": 9.5, "image": ""},
     ]

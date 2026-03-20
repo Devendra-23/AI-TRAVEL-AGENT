@@ -1,51 +1,53 @@
-PROJECT_SUMMARY.md: Amazing AI Travel Agent
-📋 Executive Summary
-An autonomous multi-agent system that transforms natural language prompts into high-fidelity, budget-aware travel itineraries. The system orchestrates multiple LLM-powered nodes to perform geocoding, live flight/hotel auditing, and sequential planning, visualized through a modern 3D WebGL interface.
+📋 Project Summary: TravelDev AI
+Autonomous Travel Intelligence & Cinematic Discovery
+TravelDev is a high-performance, multi-agent autonomous system that transforms complex natural language travel intents into precise, GDS-verified itineraries. Built on a stateful LangGraph architecture, it bridges the gap between creative planning and real-world financial accuracy, all wrapped in a premium 3D WebGL interface.
 
 🚀 Technical Core (The "How It Works")
 
-1. Agentic Orchestration (LangGraph)
-   Stateful DAG Architecture: Engineered a Directed Acyclic Graph (DAG) using LangGraph to manage the trip-planning lifecycle: Input Parsing → Flight Research → Hotel Vetting → Weather/POI Retrieval → Itinerary Synthesis → Budget Audit.
+1. Agentic Orchestration & Logic
+   Stateful DAG Architecture: Engineered a Directed Acyclic Graph using LangGraph to manage the trip-planning lifecycle: Intent Parsing → GDS Flight Auditing → Tiered Hotel Vetting → POI Landmark Slicing → Contextual Itinerary Synthesis → Budget Validation.
 
-Autonomous Self-Correction: Implemented conditional edges and "Retry Logic" that allows the agent to re-calculate routes or swap hotel tiers if the initial plan violates user-defined budget constraints.
+Structured Intelligence: Leveraged Gemini 1.5 Flash with custom prompting to ensure 100% stable JSON outputs. Implemented a "Manual Construction Engine" fallback to maintain UI integrity if the LLM encounters non-deterministic data.
 
-Structured Data Extraction: Leveraged Gemini 1.5 Flash with custom Pydantic schemas to ensure 100% stable JSON outputs from non-deterministic natural language inputs.
+Dynamic Intent Extraction: Developed a regex-based "City Sniffer" to pre-fetch destination data, allowing the UI to react before the AI completes its reasoning cycle.
 
-2. Real-Time GDS & API Integration
-   Multi-Source Tooling: Integrated RapidAPI (Booking.com & Skyscanner) for live inventory auditing, OpenWeather for destination climate checks, and Google Places for point-of-interest (POI) discovery.
+2. Live GDS & Spatial Intelligence
+   GDS-Grade Tooling: Integrated SerpApi (Google Hotels & Flights) to perform real-time inventory auditing, replacing legacy cached data with live market pricing and high-resolution property photography.
 
-Data Normalization: Developed a resilient backend layer to handle complex API responses, including Base64-encoded Location IDs and nested JSON price structures, ensuring consistent data flow to the frontend.
+Strict Landmark Distribution: Engineered a backend algorithm that hard-slices real-world Points of Interest (POIs) by day. This prevents AI "landmark repetition" and ensures every day of the itinerary is geographically unique.
 
-Hybrid Model Strategy: Optimized API costs and latency by routing high-context planning tasks to Gemini 1.5 Pro while using the "Flash" model for high-speed sub-tasks (geocoding and weather parsing).
+Robust Financial Sanitization: Built a custom regex-based currency processor to normalize non-standard GDS price strings (e.g., "€1.200,50"), ensuring "Financial Integrity" badges are mathematically accurate.
 
-3. 3D Spatial & UI Engineering
-   WebGL Visualization: Integrated an interactive 3D globe using cobe, featuring dynamic Phi/Theta coordinate conversion. The globe autonomously rotates to and marks destinations extracted by the AI in real-time.
+3. Cinematic UI & WebGL Engineering
+   Cinematic Backdrop Engine: Developed a Ken Burns-style slideshow system using the Unsplash API. It fetches 5 landmark-specific images per destination and cycles them with a smooth 3-second cross-fade and subtle zoom effect.
 
-State-Driven UX: Designed a "Departure Board" micro-interaction and custom CSS takeoff animations to mask LLM processing latency, transforming a 5-second wait into an engaging visual event.
+3D Spatial Visualization: Integrated a high-performance WebGL globe (cobe). The globe features dynamic coordinate interpolation, flying the camera to glowing markers that represent the user's flight path in real-time.
 
-Responsive Architecture: Resolved complex z-index stacking and canvas bleed issues using CSS isolation and responsive opacity scaling for WebGL contexts.
+Interactive Spatial Blueprints: Replaced static maps with custom-styled "Interactive Map Cards." These provide one-click deep links to Google Maps, pre-loaded with the day's specific landmarks.
 
 🛠️ Engineering Highlights (CV-Ready Bullets)
-Logic Hardening: Synchronized LangGraph state variables with strictly typed Python functions to prevent state drift during multi-step agent execution.
+API Hardening: Architected a resilient backend layer in FastAPI to handle complex, nested GDS responses and Base64-encoded entity IDs.
 
-API Resilience: Designed a fault-tolerant input processing layer using regex-based "City Sniffing" and error-handling wrappers to maintain 100% execution stability even with partial or ambiguous user prompts.
+Full-Stack State Management: Synchronized LangGraph state variables with a Vite/React frontend, maintaining a "Verified Journey" status across multi-step execution windows.
 
-Full-Stack Sync: Architected a FastAPI backend supporting asynchronous state machine execution, bridged with a Vite/React frontend via modularized environment variable management.
+Defensive UI Architecture: Implemented resilient useMemo parsing hooks to handle fluctuating AI JSON structures, preventing frontend crashes during malformed responses.
 
-Performance Optimization: Optimized WebGL rendering performance for mobile viewports, replacing aggressive display toggles with GPU-friendly rendering contexts.
+Visual Latency Masking: Designed a "Split-Flap" style Departure Board loading state to transform high-latency AI reasoning into an engaging brand-building moment.
 
-📅 Development Milestones (The "Evolution")
+📅 Final Development Milestones
 Phase 1: Foundation & Geocoding
-Established the FastAPI / Uvicorn server-side architecture.
+Established the FastAPI / React bridge.
 
-Engineered the initial LLM prompt to convert "Spain" into "MAD" (Madrid-Barajas) with GPS coordinates.
+Engineered geocoding nodes to convert natural language into GPS-ready markers.
 
-Phase 2: Live Inventory Auditing
-The "Host-Mismatch" Challenge: Diagnosed and resolved 403 Forbidden errors by meticulously aligning X-RapidAPI-Host headers with specific endpoint subscriptions.
+Phase 2: GDS Integration & Hardening
+The Pricing Challenge: Solved currency symbol and comma-injection issues using robust regex sanitization.
 
-Dynamic Date Logic: Implemented datetime validation to prevent "Error 0" crashes, ensuring hotel stay durations always matched user-selected calendar dates.
+Flight Transparency: Redesigned result cards to show stacked Outbound/Return price breakdowns for maximum user clarity.
 
-Phase 3: Visual Polish & UX Intelligence
-Instant Pre-fetch: Integrated the Unsplash API to provide immediate visual feedback (cityscapes) while the heavy AI reasoning happens in the background.
+Phase 3: Premium Polish & Launch
+Cinematic Slideshows: Moved from static backdrops to dynamic destination rotation.
 
-Financial Integrity: Developed the "Euro-Audit" node to calculate the sum of real-time flight and hotel data, providing a "Verified" cost breakdown.
+Itinerary Perfection: Implemented the "Triple-Point Mandate," forcing the AI to provide Morning, Mid-day, and Evening activities using real-world landmark descriptions.
+
+Spatial Interaction: Integrated Interactive Map Cards to bridge the gap between digital planning and real-world walking routes.

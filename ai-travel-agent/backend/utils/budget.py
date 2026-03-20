@@ -1,53 +1,49 @@
 def calculate_total_cost(state: dict) -> dict:
     """
-    Calculates full trip cost in EUR and returns audited budget fields.
-    Standardized for European market requirements.
+    Calculates the full journey cost. 
+    Syncs with Booking GDS 'price_per_night_eur' vs Total Stay logic.
     """
+    days = max(1, int(state.get('duration_days', 1) or 1))
     breakdown = {}
-    days = int(state.get('duration_days', 1) or 1)
 
-    # 1. Flight (Standardized to price_eur from RapidAPI)
-    selected_flight = state.get('selected_flight')
-    if selected_flight:
-        # We check price_eur, fallback to price_usd if necessary, then 0.0
-        breakdown['flight'] = float(selected_flight.get('price_eur') or selected_flight.get('price_usd') or 0.0)
-    else:
-        breakdown['flight'] = 0.0
+    # 1. Flights (Round-Trip Total)
+    # We check both the list and the selected_flight key
+    flight_data = state.get('selected_flight') or (state.get('flights')[0] if state.get('flights') else None)
+    flight_cost = float(flight_data.get('price_eur', 0) if flight_data else 0)
+    breakdown['flight'] = flight_cost
 
-    # 2. Hotel (Nightly rate × nights)
-    selected_hotel = state.get('selected_hotel')
-    if selected_hotel:
-        nightly_rate = float(selected_hotel.get('price_per_night_eur') or selected_hotel.get('price_per_night_usd') or 0.0)
-        breakdown['hotel'] = nightly_rate * days
+    # 2. Hotels (Nightly * Nights)
+    hotel_data = state.get('selected_hotel') or (state.get('hotels')[0] if state.get('hotels') else None)
+    if hotel_data:
+        # We use the nightly rate we calculated in hotels.py
+        nightly = float(hotel_data.get('price_per_night_eur', 0))
+        breakdown['hotel'] = nightly * days
     else:
         breakdown['hotel'] = 0.0
 
-    # 3. Activities (Iterating through the roadmap)
-    activities_cost = 0.0
+    # 3. Activities (Summing specific costs from the AI Itinerary)
+    act_total = 0.0
     itinerary = state.get('itinerary', {})
     if isinstance(itinerary, dict) and 'days' in itinerary:
-        for day in itinerary['days']:
+        for day in itinerary.get('days', []):
             for act in day.get('activities', []):
-                # AI is commanded to use cost_eur in nodes.py
-                activities_cost += float(act.get('cost_eur') or act.get('cost_usd') or 0.0)
-    
-    breakdown['activities'] = activities_cost
+                act_total += float(act.get('cost_eur', 0))
+    breakdown['activities'] = act_total
 
-    # 4. Meals Estimate (European Daily Average: €50)
-    breakdown['meals'] = float(days * 50.0)
+    # 4. Meals (Luxury Daily Average: €60)
+    breakdown['meals'] = float(days * 60.0)
 
-    # 5. Total Calculation with 10% "Safety Buffer"
+    # 5. Total + 10% Buffer
     subtotal = sum(breakdown.values())
-    breakdown['buffer'] = round(subtotal * 0.10, 2)
-    total = subtotal + breakdown['buffer']
+    buffer_amt = round(subtotal * 0.10, 2)
+    total_final = subtotal + buffer_amt
 
-    # Financial Audit against User Budget
-    # Ensure user_budget is handled as EUR
-    user_budget = float(state.get('budget_usd') or 0.0) 
+    # 6. Budget Check
+    user_limit = float(state.get('budget_usd') or state.get('budget_eur') or 0.0)
 
     return {
         'cost_breakdown': breakdown,
-        'total_cost_eur': round(total, 2),
-        'total_cost': round(total, 2), # Duplicate for UI safety
-        'within_budget': total <= user_budget if user_budget > 0 else True,
+        'total_cost_eur': int(total_final),
+        'within_budget': total_final <= user_limit if user_limit > 0 else True,
+        'buffer_applied': buffer_amt
     }
