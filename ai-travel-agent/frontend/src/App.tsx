@@ -72,6 +72,7 @@ function DepartureBoard() {
 // --- GLOBE COMPONENT (RESPONSIVE) ---
 function TravelGlobe({ lat, lng, originLat, originLng }: any) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Dynamic size based on window width
   const [size, setSize] = useState(window.innerWidth < 768 ? 350 : 600);
 
   useEffect(() => {
@@ -93,8 +94,8 @@ function TravelGlobe({ lat, lng, originLat, originLng }: any) {
     let phi = 0;
     const globe = createGlobe(canvasRef.current, {
       devicePixelRatio: 2,
-      width: size * 2,
-      height: size * 2,
+      width: size * 2, // Applied dynamic size
+      height: size * 2, // Applied dynamic size
       phi: 0,
       theta: 0.3,
       dark: 1,
@@ -181,7 +182,8 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("http://localhost:8000/plan", {
+      const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+      const res = await fetch(`${apiUrl}/plan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -243,7 +245,7 @@ export default function App() {
 
       {loading && <DepartureBoard />}
 
-      {/* RESPONSIVE GLOBE POSITIONING */}
+      {/* RESPONSIVE GLOBE POSITIONING (Centers on mobile, right-aligned on desktop) */}
       <div className="fixed top-[60%] md:top-1/2 right-1/2 translate-x-1/2 md:translate-x-0 md:right-[-10%] lg:right-[0%] -translate-y-1/2 pointer-events-none -z-10 opacity-40 md:opacity-60 flex items-center justify-center">
         <TravelGlobe
           key={`${itinerary?.destination || "idle"}`}
@@ -258,7 +260,7 @@ export default function App() {
         {/* LOGO & NAVIGATION */}
         <nav className="mb-12 md:mb-24 flex items-center gap-4">
           <div className="relative group">
-            <div className="relative w-10 h-10 md:w-12 md:h-12 bg-white/10 rounded-lg flex items-center justify-center border border-white/5">
+            <div className="relative w-10 h-10 md:w-12 md:h-12">
               <img
                 src="/logo.png"
                 alt="TravelDev Logo"
@@ -267,20 +269,20 @@ export default function App() {
             </div>
           </div>
           <div className="flex flex-col">
-            <span className="text-xl md:text-2xl font-black tracking-tighter uppercase leading-none text-white">
+            <span className="text-xl md:text-2xl font-black tracking-tighter uppercase leading-none">
               Travel<span className="text-blue-500">Dev</span>
             </span>
           </div>
         </nav>
 
-        {/* HERO SECTION */}
+        {/* HERO SECTION (Responsive Font Sizes) */}
         <div className="mb-10 md:mb-12 max-w-4xl text-left">
           <h1 className="text-5xl sm:text-6xl md:text-8xl font-black tracking-tighter mb-6 md:mb-8 leading-[0.9]">
             Dream it. <br />
             <span className="text-blue-500">We find it.</span>
           </h1>
           <div className="space-y-3 md:space-y-4">
-            <p className="text-lg md:text-2xl font-bold tracking-tight text-white">
+            <p className="text-lg md:text-2xl font-bold tracking-tight">
               Travel at the speed of thought.{" "}
               <span className="text-slate-300 font-medium italic block md:inline">
                 Powered by Agentic Intelligence.
@@ -289,7 +291,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* RESPONSIVE INPUT BAR */}
+        {/* RESPONSIVE INPUT BAR (Stacks on mobile, horizontal on desktop) */}
         <div className="max-w-5xl mb-12 md:mb-16 relative group">
           <div className="flex gap-4 mb-4 min-h-[28px]">
             {itinerary && (
@@ -308,7 +310,7 @@ export default function App() {
             <div className="flex items-center flex-1 px-4 md:px-6 py-4 md:py-5 border-b lg:border-b-0 border-white/5">
               <Sparkles size={20} className="text-[#39D39F] mr-3 shrink-0" />
               <input
-                className="w-full bg-transparent outline-none text-sm md:text-base font-bold placeholder:text-slate-500 text-white"
+                className="w-full bg-transparent outline-none text-sm md:text-base font-bold placeholder:text-slate-500"
                 placeholder="Paris to London for 3 days?"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
@@ -322,7 +324,7 @@ export default function App() {
                   min={today}
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="bg-transparent text-[10px] md:text-sm font-black outline-none cursor-pointer hover:text-blue-400 transition-colors text-white"
+                  className="bg-transparent text-[10px] md:text-sm font-black outline-none cursor-pointer hover:text-blue-400 transition-colors"
                 />
                 <ArrowRight size={12} className="text-slate-600" />
                 <input
@@ -330,13 +332,13 @@ export default function App() {
                   min={startDate || today}
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="bg-transparent text-[10px] md:text-sm font-black outline-none cursor-pointer hover:text-blue-400 transition-colors text-white"
+                  className="bg-transparent text-[10px] md:text-sm font-black outline-none cursor-pointer hover:text-blue-400 transition-colors"
                 />
               </div>
             </div>
             <button
               onClick={handlePlanTrip}
-              className="bg-blue-600 px-8 lg:px-12 py-4 lg:py-5 rounded-xl md:rounded-2xl font-black hover:bg-blue-500 transition-all uppercase text-xs md:text-sm m-1 md:m-2 shadow-xl active:scale-95 text-white"
+              className="bg-blue-600 px-8 lg:px-12 py-4 lg:py-5 rounded-xl md:rounded-2xl font-black hover:bg-blue-500 transition-all uppercase text-xs md:text-sm m-1 md:m-2 shadow-xl active:scale-95"
             >
               PLAN
             </button>
@@ -350,7 +352,7 @@ export default function App() {
 
         {itinerary && (
           <div className="max-w-5xl animate-in fade-in slide-in-from-bottom-4 duration-1000 relative z-20">
-            {/* COMMAND BAR */}
+            {/* COMMAND BAR (Stackable) */}
             <div className="flex flex-col sm:flex-row justify-between items-center mb-8 md:mb-10 gap-4 bg-slate-900/40 p-3 md:p-4 rounded-2xl md:rounded-[2rem] border border-white/5 backdrop-blur-md">
               <div className="flex items-center gap-3">
                 <div className="px-3 md:px-5 py-1.5 md:py-2 rounded-full text-[8px] md:text-[10px] font-black uppercase tracking-widest bg-blue-600 text-white shadow-lg">
@@ -376,6 +378,7 @@ export default function App() {
               </button>
             </div>
 
+            {/* RESULTS GRID (Stacks on mobile) */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8 mb-8 md:mb-12">
               <div className="lg:col-span-2">
                 <div className="p-6 md:p-8 rounded-3xl md:rounded-[2.5rem] bg-slate-900/60 backdrop-blur-3xl border border-white/10 shadow-2xl h-full flex flex-col gap-6 md:justify-between">
@@ -389,6 +392,7 @@ export default function App() {
                       </h4>
                     </div>
 
+                    {/* CLICKABLE FLIGHT STACK */}
                     <a
                       href={`https://www.google.com/search?q=flights+from+${
                         itinerary.origin_name || ""
@@ -449,6 +453,7 @@ export default function App() {
                 </div>
               </div>
 
+              {/* HOTEL TIERS */}
               <div className="rounded-3xl md:rounded-[2.5rem] border border-white/10 bg-slate-900/60 backdrop-blur-3xl p-6 md:p-8">
                 <h3 className="text-lg md:text-xl font-bold text-white mb-6 flex items-center gap-2">
                   <Bed className="text-blue-500" size={18} /> Property Tier
@@ -508,6 +513,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* INTEGRITY SECTION (Responsive padding and layout) */}
             <div className="bg-[#39D39F]/10 border border-[#39D39F]/20 rounded-3xl md:rounded-[3rem] p-6 md:p-10 mb-8 md:mb-16 flex flex-col md:flex-row justify-between items-center gap-6 backdrop-blur-md text-center md:text-left">
               <div className="max-w-md">
                 <h3 className="text-[#39D39F] font-mono text-[10px] md:text-sm uppercase tracking-[0.4em] mb-3 flex items-center gap-2 justify-center md:justify-start">
@@ -528,6 +534,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* ITINERARY (Responsive Timeline) */}
             <div className="mt-12 space-y-16 md:space-y-20">
               <h3 className="text-2xl md:text-4xl font-black tracking-tight border-b border-white/10 pb-6 italic uppercase">
                 <Clock className="text-blue-500" /> AI Suggested Itinerary
