@@ -41,3 +41,4 @@ class TripState(TypedDict):
     within_budget: bool
     current_step: str
     messages: List[Dict]
+    errors: List[str] # Added this to match main.py!

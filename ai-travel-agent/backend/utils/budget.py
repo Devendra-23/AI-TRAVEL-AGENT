@@ -45,5 +45,9 @@ def calculate_total_cost(state: dict) -> dict:
         'cost_breakdown': breakdown,
         'total_cost_eur': int(total_final),
         'within_budget': total_final <= user_limit if user_limit > 0 else True,
-        'buffer_applied': buffer_amt
+        'buffer_applied': buffer_amt,
+        # CRITICAL: Re-include these so they reach the 'compiler' node
+        'itinerary': itinerary,
+        'selected_flight': flight_data,
+        'selected_hotel': hotel_data
     }

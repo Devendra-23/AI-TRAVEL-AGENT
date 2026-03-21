@@ -1,5 +1,4 @@
 import json
-import time
 import os
 import re
 import requests
@@ -36,13 +35,17 @@ def get_coords(city_name: str):
         print(f"🌍 Geocoding error for {city_name}: {e}")
     return 0.0, 0.0
 
-def clean_json_response(response_content):
-    content = response_content.content if hasattr(response_content, 'content') else str(response_content)
-    start_idx = content.find('{')
-    end_idx = content.rfind('}')
-    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-        return content[start_idx:end_idx + 1]
-    return content.replace('```json', '').replace('```', '').strip()
+def clean_json_response(content):
+    """Cleans AI responses to ensure valid JSON parsing."""
+    content = str(content)
+    # Remove markdown code block wrappers
+    content = re.sub(r'```json\s*|\s*```', '', content).strip()
+    # Find the outermost curly braces
+    start = content.find('{')
+    end = content.rfind('}')
+    if start != -1 and end != -1:
+        return content[start:end+1]
+    return content
 
 # --- 1. PARSE INPUT ---
 def parse_input_node(state: TripState) -> dict:
@@ -70,7 +73,8 @@ def parse_input_node(state: TripState) -> dict:
         "destination_lng": d_lng,
         "duration_days": duration,
         "start_date": state.get('start_date') or today_str,
-        "end_date": state.get('end_date') or today_str
+        "end_date": state.get('end_date') or today_str,
+        "current_step": "parsed"
     }
 
 # --- 2. SEARCH FLIGHTS ---
@@ -85,79 +89,71 @@ def search_hotels_node(state: TripState) -> dict:
 
 # --- 4. WEATHER & POIs ---
 def check_weather_node(state: TripState) -> dict:
-    # We still fetch it for budget/internal logic, but we won't display it if requested
     return {"weather": check_weather(state['destination'])}
 
 def get_pois_node(state: TripState) -> dict:
     return {"pois": get_pois(state['destination'])}
 
-# --- 6. PLANNER (FIXED ITINERARY DISTRIBUTION) ---
+
+# --- 6. PLANNER (HIGH-VIBE TOURIST REALISM) ---
 def planner_node(state: TripState) -> dict:
     dest = state['destination']
-    days_count = int(state.get('duration_days', 3))
+    days_count = int(state.get('duration_days', 1))
     real_pois = state.get('pois', [])
     
-    # Selection logic for flight
     found_flights = state.get('flights', [])
-    selected_flight = found_flights[0] if found_flights else {"airline": "Global Carrier", "price_eur": 480}
+    selected_flight = found_flights[0] if found_flights else {"airline": "Global Carrier", "price_eur": 450}
+    selected_hotel = state.get('hotels')[0] if state.get('hotels') else None
 
-    # STEP 1: Manually Slice POIs to prevent duplication
-    # We take 2 landmarks per day to ensure variety
-    poi_assignments = []
-    for i in range(days_count):
-        start = i * 2
-        end = start + 2
-        day_landmarks = real_pois[start:end]
-        if not day_landmarks: # Fallback if we run out of real landmarks
-            day_landmarks = [{"name": "Historic City Center", "description": "Local exploration"}]
-        poi_assignments.append(day_landmarks)
+    print(f"📝 [PLANNER] Forcing {days_count} days for {dest}...")
 
-    print(f"📝 [PLANNER] Generating strict itinerary using {len(real_pois)} real landmarks...")
-    
+    # Data Anchor: Ensure we have landmarks to show even in fallback
+    poi_list = [p['name'] for p in real_pois] if real_pois else [f"{dest} Old Town", f"{dest} Central Park", f"{dest} Museum"]
+
     try:
-        # Construct a very explicit context for the AI
-        poi_text = ""
-        for idx, day_list in enumerate(poi_assignments):
-            landmark_names = ", ".join([p['name'] for p in day_list])
-            poi_text += f"Day {idx+1} MUST center around: {landmark_names}\n"
-
-        sys_msg = "You are a professional travel guide. You must create a SPECIFIC itinerary using ONLY the landmarks provided. No generic 'Heritage' filler."
-        user_msg = f"""Plan a {days_count}-day trip to {dest}. 
+        sys_msg = f"You are a Travel API. You MUST return a JSON object with a 'days' array containing EXACTLY {days_count} elements."
+        user_msg = f"""Plan a {days_count}-day trip to {dest}.
+        Use these landmarks: {', '.join(poi_list[:6])}.
         
-        MANDATORY ASSIGNMENTS:
-        {poi_text}
-
-        RULES:
-        1. Every day must have 3 activities: Morning, Mid-day, and Evening.
-        2. Activity names MUST contain the landmark name (e.g., 'Guided tour of Belém Tower').
-        3. Do NOT use generic names like 'Local heritage discovery' or 'Cultural Exploration'.
-        4. Use the description of the landmarks to make activities unique.
-        5. Return ONLY clean JSON.
-
-        Format: {{ "days": [ {{ "day": 1, "theme": "Landmark Focus", "activities": [ {{ "name": "...", "time": "10:00 AM", "cost_eur": 15 }} ] }} ] }}
+        Return ONLY this JSON format:
+        {{
+          "days": [
+            {{
+              "day": 1,
+              "theme": "Historical Exploration",
+              "activities": [
+                {{ "name": "Visit the local landmarks", "time": "10:00 AM", "cost_eur": 20 }},
+                {{ "name": "Lunch at a traditional bistro", "time": "01:00 PM", "cost_eur": 30 }},
+                {{ "name": "Evening city views", "time": "07:00 PM", "cost_eur": 0 }}
+              ]
+            }}
+          ]
+        }}
+        (Add more days until you reach {days_count} days).
         """
         
         response = llm.invoke([("system", sys_msg), ("user", user_msg)])
-        plan = json.loads(clean_json_response(response))
-        
-        # FINAL GUARD: If AI failed to provide days, use the manual builder
-        if not plan.get("days"):
-            raise ValueError("Empty days")
+        clean_json = clean_json_response(response.content if hasattr(response, 'content') else str(response))
+        plan = json.loads(clean_json)
+
+        # Ensure the AI didn't short-change us on days
+        if len(plan.get("days", [])) < days_count:
+            raise ValueError("AI under-delivered day count")
 
     except Exception as e:
-        print(f"🚨 [PLANNER AI FAIL] {e}. Using Manual Construction Engine.")
-        # MANUAL CONSTRUCTION: If Gemini fails, we build it ourselves using the POIs
+        print(f"🚨 [PLANNER AI FAIL] {e}. Building manual itinerary from POIs...")
+        # REALISTIC FALLBACK: If AI fails, we build it ourselves using the real POIs
         manual_days = []
         for i in range(days_count):
-            day_pois = poi_assignments[i]
-            main_landmark = day_pois[0]['name']
+            # Pick 2-3 POIs for this specific day
+            day_pois = poi_list[i*2 : (i*2)+2] if i*2 < len(poi_list) else [poi_list[0]]
             manual_days.append({
                 "day": i + 1,
-                "theme": f"Discovering {main_landmark}",
+                "theme": f"Exploring {dest} -  Day {i+1}",
                 "activities": [
-                    {"name": f"Comprehensive tour of {main_landmark}", "time": "09:30 AM", "cost_eur": 25},
-                    {"name": f"Afternoon stroll around {day_pois[-1]['name']}", "time": "02:00 PM", "cost_eur": 0},
-                    {"name": f"Evening dinner near {main_landmark}", "time": "07:30 PM", "cost_eur": 45}
+                    {"name": f"Morning visit to {day_pois[0]}", "time": "09:30 AM", "cost_eur": 25},
+                    {"name": f"Afternoon discovery of {day_pois[1] if len(day_pois)>1 else dest}", "time": "02:00 PM", "cost_eur": 30},
+                    {"name": f"Evening dinner in central {dest}", "time": "07:30 PM", "cost_eur": 40}
                 ]
             })
         plan = {"days": manual_days}
@@ -165,8 +161,7 @@ def planner_node(state: TripState) -> dict:
     return {
         "itinerary": plan,
         "selected_flight": selected_flight,
-        "destination_lat": state['destination_lat'], 
-        "destination_lng": state['destination_lng']
+        "selected_hotel": selected_hotel
     }
 
 # --- 7. BUDGET & COMPILATION ---
@@ -175,14 +170,13 @@ def budget_check_node(state: TripState) -> dict:
     return calculate_total_cost(state)
 
 def compile_itinerary_node(state: TripState) -> dict:
-    # Weather is fetched in state but not passed to final frontend display bundle
     return {
         "destination_lat": state.get("destination_lat"),
         "destination_lng": state.get("destination_lng"),
         "origin_lat": state.get("origin_lat"),
         "origin_lng": state.get("origin_lng"),
         "destination": state.get("destination"),
-        "itinerary": state.get("itinerary"),
+        "itinerary": state.get("itinerary"),  
         "selected_flight": state.get("selected_flight"),
         "hotels": state.get("hotels", []),
         "total_cost_eur": state.get("total_cost_eur"), 
