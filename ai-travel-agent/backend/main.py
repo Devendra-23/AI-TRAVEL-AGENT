@@ -16,10 +16,9 @@ from agent.nodes import (
 app = FastAPI(title="TravelDev AI Agent GDS")
 
 # --- CORS CONFIGURATION ---
-# This allows your Vercel frontend to communicate with your Fly.io backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Change this to your actual Vercel URL later for security
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -58,25 +57,25 @@ def create_initial_state(user_prompt: str) -> dict:
 # --- 2. GRAPH DEFINITION ---
 workflow = StateGraph(TripState)
 
-# Add all our "Brain" nodes 
+# Add nodes with UNIQUE names (different from State attributes)
 workflow.add_node("parser", parse_input_node)
 workflow.add_node("fetch_flights", search_flights_node)
 workflow.add_node("fetch_hotels", search_hotels_node)
-workflow.add_node("weather", check_weather_node)
-workflow.add_node("pois", get_pois_node)
+workflow.add_node("fetch_weather", check_weather_node) # Renamed from 'weather'
+workflow.add_node("fetch_pois", get_pois_node)        # Renamed from 'pois'
 workflow.add_node("planner", planner_node)
-workflow.add_node("budget", budget_check_node)
+workflow.add_node("budget_check", budget_check_node)   # Renamed from 'budget'
 workflow.add_node("compiler", compile_itinerary_node)
 
-# Set the flow (Linear Workflow)
+# Set the flow (Edges)
 workflow.set_entry_point("parser")
 workflow.add_edge("parser", "fetch_flights")
 workflow.add_edge("fetch_flights", "fetch_hotels")
-workflow.add_edge("fetch_hotels", "weather")
-workflow.add_edge("weather", "pois")
-workflow.add_edge("pois", "planner")
-workflow.add_edge("planner", "budget")
-workflow.add_edge("budget", "compiler")
+workflow.add_edge("fetch_hotels", "fetch_weather")
+workflow.add_edge("fetch_weather", "fetch_pois")
+workflow.add_edge("fetch_pois", "planner")
+workflow.add_edge("planner", "budget_check")
+workflow.add_edge("budget_check", "compiler")
 workflow.add_edge("compiler", END)
 
 # Compile the Agent
@@ -105,6 +104,5 @@ async def root():
     return {"status": "online", "agent": "TravelDev GDS v1.0"}
 
 if __name__ == "__main__":
-    # Get port from environment (Fly.io requirement) or default to 8000
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)
