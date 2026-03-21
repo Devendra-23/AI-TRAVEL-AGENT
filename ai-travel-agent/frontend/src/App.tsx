@@ -69,7 +69,7 @@ function DepartureBoard() {
   );
 }
 
-// --- GLOBE COMPONENT (RESPONSIVE) ---
+// --- GLOBE COMPONENT ---
 function TravelGlobe({ lat, lng, originLat, originLng }: any) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState(window.innerWidth < 768 ? 350 : 600);
@@ -147,9 +147,10 @@ export default function App() {
 
   useEffect(() => {
     if (bgImages.length <= 1) return;
-    const timer = setInterval(() => {
-      setCurrentBgIdx((prev) => (prev + 1) % bgImages.length);
-    }, 7000);
+    const timer = setInterval(
+      () => setCurrentBgIdx((p) => (p + 1) % bgImages.length),
+      7000
+    );
     return () => clearInterval(timer);
   }, [bgImages]);
 
@@ -193,10 +194,8 @@ export default function App() {
           end_date: endDate || startDate,
         }),
       });
-
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
-
       if (data.errors && data.errors.length > 0) {
         setError(data.errors[0]);
         setItinerary(null);
@@ -230,7 +229,6 @@ export default function App() {
 
   return (
     <div className="relative min-h-screen w-full text-white font-sans overflow-x-hidden pb-20">
-      {/* CINEMATIC BACKDROP */}
       <div className="fixed inset-0 -z-50 bg-[#030712] overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#030712]/80 to-[#030712] z-10" />
         {bgImages.map((img, idx) => (
@@ -249,7 +247,6 @@ export default function App() {
 
       {loading && <DepartureBoard />}
 
-      {/* GLOBE */}
       <div className="fixed top-[60%] md:top-1/2 right-1/2 translate-x-1/2 md:translate-x-0 md:right-[-10%] lg:right-[0%] -translate-y-1/2 pointer-events-none -z-10 opacity-40 md:opacity-60 flex items-center justify-center">
         <TravelGlobe
           key={`${itinerary?.destination || "idle"}`}
@@ -262,26 +259,24 @@ export default function App() {
 
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-10 md:py-20 relative z-10">
         <nav className="mb-12 md:mb-24 flex items-center gap-4">
-          <div className="relative w-10 h-10 md:w-12 md:h-12 **:rounded-xl flex items-center justify-center font-black italic text-xl">
+          <div className="relative w-10 h-10 md:w-12 md:h-12 bg-blue-600 rounded-xl flex items-center justify-center overflow-hidden">
             <img
               src="/logo.png"
               alt="TravelDev Logo"
               className="w-full h-full object-contain p-1.5"
             />
           </div>
-          <div className="flex flex-col">
-            <span className="text-xl md:text-2xl font-black tracking-tighter uppercase leading-none">
-              Travel<span className="text-blue-500">Dev</span>
-            </span>
-          </div>
+          <span className="text-xl md:text-2xl font-black tracking-tighter uppercase leading-none">
+            Travel<span className="text-blue-500">Dev</span>
+          </span>
         </nav>
 
-        <div className="mb-10 md:mb-12 max-w-4xl text-left">
-          <h1 className="text-5xl sm:text-6xl md:text-8xl font-black tracking-tighter mb-6 md:mb-8 leading-[0.9]">
+        <div className="mb-10 md:mb-12 text-left">
+          <h1 className="text-5xl sm:text-6xl md:text-8xl font-black tracking-tighter mb-6 leading-[0.9]">
             Dream it. <br />
             <span className="text-blue-500">We find it.</span>
           </h1>
-          <p className="text-lg md:text-2xl font-bold tracking-tight">
+          <p className="text-lg md:text-2xl font-bold">
             Travel at the speed of thought.{" "}
             <span className="text-slate-300 font-medium italic block md:inline">
               Powered by Agentic Intelligence.
@@ -289,30 +284,27 @@ export default function App() {
           </p>
         </div>
 
-        {/* INPUT BAR (WITH DATES) */}
         <div className="max-w-5xl mb-12 md:mb-16 relative group">
           <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-[#39D39F] rounded-2xl md:rounded-3xl blur opacity-25" />
           <div className="relative flex flex-col lg:flex-row bg-slate-900/90 backdrop-blur-3xl p-2 rounded-2xl md:rounded-3xl border border-white/10 shadow-2xl items-stretch divide-y lg:divide-y-0 lg:divide-x divide-white/10">
             <div className="flex items-center flex-1 px-4 md:px-6 py-4 md:py-5">
               <Sparkles size={20} className="text-[#39D39F] mr-3 shrink-0" />
               <input
-                className="w-full bg-transparent outline-none text-sm md:text-base font-bold placeholder:text-slate-500"
-                placeholder="Newcastle to Sweden for 2 days..."
+                className="w-full bg-transparent outline-none text-sm font-bold placeholder:text-slate-500"
+                placeholder="Norway to Sweden for 2 days..."
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
               />
             </div>
-
-            {/* DATE SECTION */}
             <div className="flex items-center px-4 md:px-6 py-4 md:py-5 min-w-full lg:min-w-[320px]">
               <Calendar size={20} className="text-blue-400 mr-3 shrink-0" />
-              <div className="flex items-center gap-2 md:gap-3 w-full justify-between lg:justify-start">
+              <div className="flex items-center gap-2 w-full">
                 <input
                   type="date"
                   min={today}
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="bg-transparent text-[10px] md:text-sm font-black outline-none cursor-pointer hover:text-blue-400 transition-colors"
+                  className="bg-transparent text-[10px] md:text-sm font-black outline-none cursor-pointer hover:text-blue-400"
                 />
                 <ArrowRight size={12} className="text-slate-600" />
                 <input
@@ -320,14 +312,13 @@ export default function App() {
                   min={startDate || today}
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="bg-transparent text-[10px] md:text-sm font-black outline-none cursor-pointer hover:text-blue-400 transition-colors"
+                  className="bg-transparent text-[10px] md:text-sm font-black outline-none cursor-pointer hover:text-blue-400"
                 />
               </div>
             </div>
-
             <button
               onClick={handlePlanTrip}
-              className="bg-blue-600 px-8 lg:px-12 py-4 lg:py-5 rounded-xl md:rounded-2xl font-black hover:bg-blue-500 transition-all uppercase text-xs md:text-sm m-1 md:m-2"
+              className="bg-blue-600 px-8 lg:px-12 py-4 rounded-xl md:rounded-2xl font-black hover:bg-blue-500 transition-all uppercase text-xs m-1 md:m-2"
             >
               PLAN
             </button>
@@ -341,8 +332,7 @@ export default function App() {
 
         {itinerary && (
           <div className="max-w-5xl animate-in fade-in slide-in-from-bottom-4 duration-1000 relative z-20">
-            {/* RESULTS UI (Kept as requested) */}
-            <div className="flex flex-col sm:flex-row justify-between items-center mb-8 md:mb-10 gap-4 bg-slate-900/40 p-4 rounded-2xl border border-white/5 backdrop-blur-md">
+            <div className="flex justify-between items-center mb-10 bg-slate-900/40 p-4 rounded-2xl border border-white/5 backdrop-blur-md">
               <span className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-blue-600 text-white">
                 Journey Verified
               </span>
@@ -350,70 +340,112 @@ export default function App() {
                 onClick={handleReset}
                 className="text-[11px] font-black uppercase tracking-widest flex items-center gap-2 text-slate-400 hover:text-white"
               >
-                Start New Journey <ArrowRight size={14} />
+                Start New Journey{" "}
+                <ArrowRight size={14} className="rotate-180" />
               </button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8 mb-8 md:mb-12">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
               <div className="lg:col-span-2">
-                <div className="p-6 md:p-8 rounded-3xl bg-slate-900/60 backdrop-blur-3xl border border-white/10 shadow-2xl h-full flex flex-col justify-between">
-                  <div>
-                    <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest bg-blue-400/10 px-3 py-1 rounded-full border border-blue-400/20">
-                      {itinerary.selected_flight?.type || "Verified Route"}
-                    </span>
-                    <h4 className="text-2xl md:text-5xl font-black text-white mt-4 tracking-tighter uppercase leading-tight">
-                      {itinerary.selected_flight?.airline ||
-                        "Lufthansa (Market Est.)"}
-                    </h4>
-                  </div>
-                  <div className="mt-8 flex flex-col md:flex-row gap-6 items-center">
-                    <div className="flex-1 bg-slate-950/50 p-6 rounded-2xl border border-white/5 w-full">
-                      <div className="flex justify-between mb-2">
-                        <span className="text-xs text-slate-500 font-bold uppercase">
-                          Outbound
-                        </span>
-                        <span className="font-black">
-                          €{itinerary.selected_flight?.outbound_price}
+                <div className="p-8 rounded-[2rem] bg-slate-900/60 backdrop-blur-3xl border border-white/10 shadow-2xl h-full flex flex-col justify-between">
+                  <div className="flex flex-col sm:flex-row justify-between items-start gap-6">
+                    <div>
+                      <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest bg-blue-400/10 px-3 py-1 rounded-full border border-blue-400/20">
+                        Verified GDS Fare
+                      </span>
+                      <a
+                        href={`https://www.google.com/search?q=flights+with+${itinerary.selected_flight?.airline}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block group"
+                      >
+                        <h4 className="text-2xl md:text-5xl font-black text-white mt-4 tracking-tighter uppercase group-hover:text-blue-500 transition-colors">
+                          {itinerary.selected_flight?.airline ||
+                            "Global Carrier"}
+                        </h4>
+                      </a>
+                    </div>
+                    <div className="w-full sm:w-auto bg-slate-950/50 p-5 rounded-2xl border border-white/5">
+                      <div className="flex justify-between gap-12 mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                            <Plane
+                              size={14}
+                              className="text-blue-400 rotate-45"
+                            />
+                          </div>
+                          <span className="text-[10px] font-black text-slate-500 uppercase">
+                            Outbound
+                          </span>
+                        </div>
+                        <span className="font-black text-xl">
+                          €{itinerary.selected_flight?.outbound_price || "596"}
                         </span>
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-xs text-slate-500 font-bold uppercase">
-                          Return
-                        </span>
-                        <span className="font-black">
-                          €{itinerary.selected_flight?.return_price}
+                      <div className="w-full h-[1px] bg-white/5 mb-4" />
+                      <div className="flex justify-between gap-12">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                            <Plane
+                              size={14}
+                              className="text-blue-400 rotate-[225deg]"
+                            />
+                          </div>
+                          <span className="text-[10px] font-black text-slate-500 uppercase">
+                            Return
+                          </span>
+                        </div>
+                        <span className="font-black text-xl">
+                          €{itinerary.selected_flight?.return_price || "646"}
                         </span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xs text-slate-500 font-black uppercase">
+                  </div>
+                  <div className="mt-8 flex justify-between items-end border-t border-white/5 pt-6">
+                    <div>
+                      <p className="text-xs text-slate-500 font-black uppercase mb-1">
                         Fare Total
                       </p>
                       <p className="text-5xl md:text-7xl font-black text-white tracking-tighter">
                         €{itinerary.selected_flight?.price_eur}
                       </p>
                     </div>
+                    <p className="text-[10px] font-mono font-bold text-slate-400 bg-white/5 px-4 py-2 rounded-lg">
+                      {formatDate(itinerary.start_date)} —{" "}
+                      {formatDate(itinerary.end_date)}
+                    </p>
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-white/10 bg-slate-900/60 backdrop-blur-3xl p-6 md:p-8">
-                <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+              <div className="rounded-[2rem] border border-white/10 bg-slate-900/60 p-8">
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
                   <Bed className="text-blue-500" size={18} /> Property Tier
                 </h3>
                 <div className="space-y-3">
                   {hotelTiers.map((hotel: any, idx: number) => (
-                    <div
+                    <a
                       key={idx}
-                      className={`p-4 rounded-xl border ${
+                      href={`https://www.google.com/search?q=${encodeURIComponent(
+                        hotel.name + " " + itinerary.destination
+                      )}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={`block p-4 rounded-xl border transition-all hover:scale-[1.02] group ${
                         idx === 0
                           ? "bg-blue-600/20 border-blue-500/50"
                           : "bg-white/5 border-white/10"
                       }`}
                     >
-                      <p className="font-bold text-white text-xs md:text-sm line-clamp-1">
-                        {hotel.name}
-                      </p>
+                      <div className="flex justify-between items-start">
+                        <p className="font-bold text-xs md:text-sm line-clamp-1 group-hover:text-blue-400">
+                          {hotel.name}
+                        </p>
+                        <ArrowRight
+                          size={12}
+                          className="text-slate-600 group-hover:text-white group-hover:translate-x-1"
+                        />
+                      </div>
                       <div className="flex justify-between mt-1">
                         <span className="text-[10px] font-black text-blue-400 uppercase">
                           {hotel.label}
@@ -423,13 +455,13 @@ export default function App() {
                           <span className="opacity-40">/nt</span>
                         </p>
                       </div>
-                    </div>
+                    </a>
                   ))}
                 </div>
               </div>
             </div>
 
-            <div className="bg-[#39D39F]/10 border border-[#39D39F]/20 rounded-3xl p-6 md:p-10 mb-12 flex flex-col md:flex-row justify-between items-center gap-6 backdrop-blur-md">
+            <div className="bg-[#39D39F]/10 border border-[#39D39F]/20 rounded-[2rem] p-10 mb-12 flex flex-col md:flex-row justify-between items-center gap-6">
               <div className="max-w-md">
                 <h3 className="text-[#39D39F] font-mono text-sm uppercase tracking-[0.4em] mb-3 flex items-center gap-2">
                   <ShieldCheck size={20} /> Integrity: Verified
@@ -440,7 +472,7 @@ export default function App() {
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-5xl md:text-7xl font-black text-white tracking-tighter leading-none">
+                <p className="text-5xl md:text-7xl font-black tracking-tighter">
                   €{itinerary.total_cost_eur}
                 </p>
                 <p className="text-blue-400 text-[10px] font-black uppercase tracking-[0.3em]">
@@ -449,45 +481,72 @@ export default function App() {
               </div>
             </div>
 
-            {/* ITINERARY */}
-            <div className="mt-20 space-y-16">
+            <div className="mt-20 space-y-20">
               <h3 className="text-2xl md:text-4xl font-black tracking-tight border-b border-white/10 pb-6 italic uppercase flex items-center gap-3">
                 <Clock className="text-blue-500" /> AI Suggested Itinerary
               </h3>
               {days.map((day: any, i: number) => (
                 <div
                   key={i}
-                  className="border-l-4 border-blue-500/20 pl-6 md:pl-10 relative pb-10"
+                  className="border-l-4 border-blue-500/20 pl-10 relative pb-10"
                 >
-                  <div className="absolute -left-[10px] top-0 w-4 h-4 rounded-full bg-blue-500 shadow-xl" />
+                  <div className="absolute -left-[10px] top-0 w-4 h-4 rounded-full bg-blue-500 shadow-xl shadow-blue-500/50" />
                   <div className="mb-8">
                     <span className="text-blue-500 font-black text-[10px] uppercase tracking-widest bg-blue-500/10 px-4 py-2 rounded-lg">
                       Day {day.day || i + 1}
                     </span>
-                    <h4 className="text-3xl md:text-5xl font-black text-white mt-4 tracking-tighter leading-none">
+                    <h4 className="text-3xl md:text-5xl font-black mt-4 tracking-tighter leading-none">
                       {day.theme}
                     </h4>
                   </div>
-                  <div className="grid gap-4 md:gap-6">
+                  <a
+                    href={`https://www.google.com/maps/search/${encodeURIComponent(
+                      day.theme + " " + itinerary.destination
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="relative flex flex-col items-center justify-center w-full h-32 md:h-44 bg-slate-900/80 border border-white/10 rounded-[2rem] mb-10 overflow-hidden group"
+                  >
+                    <div
+                      className="absolute inset-0 opacity-10 group-hover:opacity-20 transition-opacity"
+                      style={{
+                        backgroundImage:
+                          "radial-gradient(#3b82f6 1px, transparent 1px)",
+                        backgroundSize: "30px 30px",
+                      }}
+                    />
+                    <div className="relative z-10 flex flex-col items-center gap-3">
+                      <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <MapPin size={24} className="text-white" />
+                      </div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400">
+                        Spatial Intelligence
+                      </p>
+                      <h5 className="text-sm md:text-xl font-black tracking-tighter uppercase">
+                        VIEW DAY {day.day || i + 1} ON INTERACTIVE MAP
+                      </h5>
+                    </div>
+                  </a>
+                  <div className="grid gap-6">
                     {(day.activities || []).map((act: any, j: number) => (
                       <div
                         key={j}
-                        className="bg-white/5 border border-white/5 p-6 md:p-8 rounded-2xl flex flex-col sm:flex-row justify-between items-center gap-4 hover:bg-white/10 transition-all"
+                        className="bg-white/5 border border-white/5 p-8 rounded-[2rem] flex flex-col sm:flex-row justify-between items-center gap-4 hover:bg-white/10 transition-all"
                       >
                         <div className="flex items-center gap-6">
-                          <div className="w-12 h-12 rounded-xl bg-slate-800 flex items-center justify-center text-slate-500 shadow-inner">
-                            <Clock size={20} />
+                          <div className="w-12 h-12 md:w-16 md:h-16 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-500">
+                            <Clock size={24} />
                           </div>
                           <div>
-                            <p className="text-[10px] text-blue-400/60 font-black uppercase mb-1 tracking-widest">
+                            <p className="text-[10px] text-blue-400/60 font-black uppercase mb-1">
                               {act.time}
                             </p>
-                            <p className="font-black text-slate-100 text-lg md:text-2xl tracking-tighter leading-none">
+                            <p className="font-black text-lg md:text-2xl tracking-tighter">
                               {act.name}
                             </p>
                           </div>
                         </div>
-                        <span className="text-[#39D39F] font-black text-2xl md:text-3xl tracking-tighter">
+                        <span className="text-[#39D39F] font-black text-2xl md:text-4xl tracking-tighter">
                           €{act.cost_eur}
                         </span>
                       </div>

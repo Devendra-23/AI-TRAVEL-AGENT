@@ -1,14 +1,14 @@
 from typing import TypedDict, Optional, List, Dict, Any
 
 class TripState(TypedDict):
-    # Core User Inputs
+    # --- CORE USER INPUTS ---
     user_prompt: str
     destination: str
     origin_city: str
     duration_days: int
     budget_usd: float
     
-    # IATA codes (Automated by Gemini)
+    # --- IATA CODES (Automated by Gemini) ---
     origin_iata: Optional[str]
     destination_iata: Optional[str]
     
@@ -17,28 +17,32 @@ class TripState(TypedDict):
     end_date: str            
     trip_type: str           
     search_airport_city: Optional[str] 
-    # ----------------------------------------
 
-    # 3D Globe Coordinates
+    # --- 3D GLOBE COORDINATES ---
     destination_lat: Optional[float]
     destination_lng: Optional[float]
     origin_lat: Optional[float]
     origin_lng: Optional[float]
 
-    # Tool Results
-    flights: List[Dict]
-    hotels: List[Dict]
-    weather: Optional[Dict] # Changed from List to Dict for better logic
-    pois: List[Dict]
+    # --- TOOL RESULTS ---
+    flights: List[Dict[str, Any]]
+    hotels: List[Dict[str, Any]]
+    weather: Optional[Dict[str, Any]] 
+    pois: List[Dict[str, Any]]
     
-    # Final Selections
-    selected_flight: Optional[Dict]
-    selected_hotel: Optional[Dict]
-    itinerary: Optional[Dict]
-    total_cost_eur: Optional[int] # Added this for the Frontend Budget Audit
+    # --- FINAL SELECTIONS ---
+    selected_flight: Optional[Dict[str, Any]]
+    selected_hotel: Optional[Dict[str, Any]]
+    itinerary: Optional[Dict[str, Any]]
+    total_cost_eur: Optional[int] 
     
-    # Logic & History
+    # --- LOGIC & HISTORY ---
     within_budget: bool
     current_step: str
-    messages: List[Dict]
-    errors: List[str] # Added this to match main.py!
+    messages: List[Dict[str, Any]]
+    errors: List[str] 
+
+    # --- MISSING PRODUCTION KEYS (Fixed for 500 Error) ---
+    # These keys are required because your nodes are generating them
+    cost_breakdown: Optional[Dict[str, float]]
+    buffer_applied: Optional[float]
