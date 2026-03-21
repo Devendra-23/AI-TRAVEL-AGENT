@@ -3,9 +3,9 @@ uvicorn==0.27.0
 python-dotenv==1.0.0
 pydantic==2.6.1
 requests==2.31.0
+langchain-core
 langchain-openai
 langgraph
-langchain-community
 langchain-google-genai
 google-search-results
 tavily-python
