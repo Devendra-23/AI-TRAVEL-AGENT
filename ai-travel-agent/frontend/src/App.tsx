@@ -181,19 +181,20 @@ export default function App() {
     setLoading(true);
     setError(null);
     try {
-      // PRODUCTION URL LOGIC
       const apiUrl =
         import.meta.env.VITE_API_URL ||
         "https://backend-red-meadow-8440.fly.dev";
-
       const res = await fetch(`${apiUrl}/plan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({
+          prompt,
+          start_date: startDate,
+          end_date: endDate || startDate,
+        }),
       });
 
-      if (!res.ok) throw new Error(`Server responded with ${res.status}`);
-
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
 
       if (data.errors && data.errors.length > 0) {
@@ -204,9 +205,7 @@ export default function App() {
         if (data.destination) updateBackground(data.destination);
       }
     } catch (err: any) {
-      setError(
-        `Connection failed: Ensure backend is awake at Fly.io. Error: ${err.message}`
-      );
+      setError(`Connection failed. Error: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -219,7 +218,7 @@ export default function App() {
       const res = await fetch(
         `https://api.unsplash.com/search/photos?query=${encodeURIComponent(
           query
-        )}%20tourism%20landmark&client_id=${accessKey}&per_page=5&orientation=landscape`
+        )}%20landmark&client_id=${accessKey}&per_page=5&orientation=landscape`
       );
       const data = await res.json();
       if (data.results?.length > 0) {
@@ -263,8 +262,12 @@ export default function App() {
 
       <div className="max-w-7xl mx-auto px-4 md:px-8 py-10 md:py-20 relative z-10">
         <nav className="mb-12 md:mb-24 flex items-center gap-4">
-          <div className="relative w-10 h-10 md:w-12 md:h-12 bg-blue-600 rounded-xl flex items-center justify-center font-black italic text-xl">
-            D
+          <div className="relative w-10 h-10 md:w-12 md:h-12 **:rounded-xl flex items-center justify-center font-black italic text-xl">
+            <img
+              src="/logo.png"
+              alt="TravelDev Logo"
+              className="w-full h-full object-contain p-1.5"
+            />
           </div>
           <div className="flex flex-col">
             <span className="text-xl md:text-2xl font-black tracking-tighter uppercase leading-none">
@@ -286,10 +289,10 @@ export default function App() {
           </p>
         </div>
 
-        {/* INPUT BAR */}
+        {/* INPUT BAR (WITH DATES) */}
         <div className="max-w-5xl mb-12 md:mb-16 relative group">
           <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-[#39D39F] rounded-2xl md:rounded-3xl blur opacity-25" />
-          <div className="relative flex flex-col lg:flex-row bg-slate-900/90 backdrop-blur-3xl p-2 rounded-2xl md:rounded-3xl border border-white/10 shadow-2xl items-stretch">
+          <div className="relative flex flex-col lg:flex-row bg-slate-900/90 backdrop-blur-3xl p-2 rounded-2xl md:rounded-3xl border border-white/10 shadow-2xl items-stretch divide-y lg:divide-y-0 lg:divide-x divide-white/10">
             <div className="flex items-center flex-1 px-4 md:px-6 py-4 md:py-5">
               <Sparkles size={20} className="text-[#39D39F] mr-3 shrink-0" />
               <input
@@ -299,6 +302,29 @@ export default function App() {
                 onChange={(e) => setPrompt(e.target.value)}
               />
             </div>
+
+            {/* DATE SECTION */}
+            <div className="flex items-center px-4 md:px-6 py-4 md:py-5 min-w-full lg:min-w-[320px]">
+              <Calendar size={20} className="text-blue-400 mr-3 shrink-0" />
+              <div className="flex items-center gap-2 md:gap-3 w-full justify-between lg:justify-start">
+                <input
+                  type="date"
+                  min={today}
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="bg-transparent text-[10px] md:text-sm font-black outline-none cursor-pointer hover:text-blue-400 transition-colors"
+                />
+                <ArrowRight size={12} className="text-slate-600" />
+                <input
+                  type="date"
+                  min={startDate || today}
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="bg-transparent text-[10px] md:text-sm font-black outline-none cursor-pointer hover:text-blue-400 transition-colors"
+                />
+              </div>
+            </div>
+
             <button
               onClick={handlePlanTrip}
               className="bg-blue-600 px-8 lg:px-12 py-4 lg:py-5 rounded-xl md:rounded-2xl font-black hover:bg-blue-500 transition-all uppercase text-xs md:text-sm m-1 md:m-2"
@@ -315,6 +341,7 @@ export default function App() {
 
         {itinerary && (
           <div className="max-w-5xl animate-in fade-in slide-in-from-bottom-4 duration-1000 relative z-20">
+            {/* RESULTS UI (Kept as requested) */}
             <div className="flex flex-col sm:flex-row justify-between items-center mb-8 md:mb-10 gap-4 bg-slate-900/40 p-4 rounded-2xl border border-white/5 backdrop-blur-md">
               <span className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-blue-600 text-white">
                 Journey Verified
@@ -339,7 +366,6 @@ export default function App() {
                         "Lufthansa (Market Est.)"}
                     </h4>
                   </div>
-
                   <div className="mt-8 flex flex-col md:flex-row gap-6 items-center">
                     <div className="flex-1 bg-slate-950/50 p-6 rounded-2xl border border-white/5 w-full">
                       <div className="flex justify-between mb-2">
@@ -423,6 +449,7 @@ export default function App() {
               </div>
             </div>
 
+            {/* ITINERARY */}
             <div className="mt-20 space-y-16">
               <h3 className="text-2xl md:text-4xl font-black tracking-tight border-b border-white/10 pb-6 italic uppercase flex items-center gap-3">
                 <Clock className="text-blue-500" /> AI Suggested Itinerary
