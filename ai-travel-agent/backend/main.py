@@ -16,9 +16,13 @@ from agent.nodes import (
 app = FastAPI(title="TravelDev AI Agent GDS")
 
 # --- CORS CONFIGURATION ---
+# Authorized to allow your specific Vercel Frontend to talk to this Fly.io backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=[
+        "https://ai-travel-agent-mu.vercel.app", 
+        "http://localhost:3000" # Keeping localhost for local testing
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -57,14 +61,15 @@ def create_initial_state(user_prompt: str) -> dict:
 # --- 2. GRAPH DEFINITION ---
 workflow = StateGraph(TripState)
 
-# Add nodes with UNIQUE names (different from State attributes)
+# Add nodes with UNIQUE names 
+# (Must be different from State keys like 'weather', 'pois', or 'flights')
 workflow.add_node("parser", parse_input_node)
 workflow.add_node("fetch_flights", search_flights_node)
 workflow.add_node("fetch_hotels", search_hotels_node)
-workflow.add_node("fetch_weather", check_weather_node) # Renamed from 'weather'
-workflow.add_node("fetch_pois", get_pois_node)        # Renamed from 'pois'
+workflow.add_node("fetch_weather", check_weather_node) 
+workflow.add_node("fetch_pois", get_pois_node)        
 workflow.add_node("planner", planner_node)
-workflow.add_node("budget_check", budget_check_node)   # Renamed from 'budget'
+workflow.add_node("budget_audit", budget_check_node)   
 workflow.add_node("compiler", compile_itinerary_node)
 
 # Set the flow (Edges)
@@ -74,8 +79,8 @@ workflow.add_edge("fetch_flights", "fetch_hotels")
 workflow.add_edge("fetch_hotels", "fetch_weather")
 workflow.add_edge("fetch_weather", "fetch_pois")
 workflow.add_edge("fetch_pois", "planner")
-workflow.add_edge("planner", "budget_check")
-workflow.add_edge("budget_check", "compiler")
+workflow.add_edge("planner", "budget_audit")
+workflow.add_edge("budget_audit", "compiler")
 workflow.add_edge("compiler", END)
 
 # Compile the Agent
@@ -87,22 +92,28 @@ class PlanRequest(BaseModel):
 
 @app.post("/plan")
 async def generate_plan(request: PlanRequest):
-    print(f"🚀 [API] Starting Journey for: {request.prompt}")
+    print(f"🚀 [API] Production Request Received: {request.prompt}")
     initial_state = create_initial_state(request.prompt)
     
     try:
-        # Run the LangGraph synchronously
+        # Run the LangGraph
         final_state = travel_agent.invoke(initial_state)
         return final_state
     except Exception as e:
         print(f"❌ [GRAPH ERROR] {e}")
-        raise HTTPException(status_code=500, detail=f"Graph Execution Failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Agent Execution Failed: {str(e)}")
 
 @app.get("/health")
 @app.get("/")
 async def root():
-    return {"status": "online", "agent": "TravelDev GDS v1.0"}
+    return {
+        "status": "online", 
+        "agent": "TravelDev GDS v1.0", 
+        "deployment": "Fly.io",
+        "authorized_origin": "https://ai-travel-agent-mu.vercel.app"
+    }
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
+    # Fly.io uses the PORT environment variable; fallback to 8080
+    port = int(os.environ.get("PORT", 8080))
     uvicorn.run(app, host="0.0.0.0", port=port)
