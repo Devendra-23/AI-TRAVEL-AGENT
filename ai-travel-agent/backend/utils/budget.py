@@ -1,113 +1,49 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from langgraph.graph import StateGraph, END
-import uvicorn
-import os
-from typing import Optional
+def calculate_total_cost(state: dict) -> dict:
+    """
+    Calculates the full journey cost. 
+    """
+    days = max(1, int(state.get('duration_days', 1) or 1))
+    breakdown = {}
 
-from agent.state import TripState
-from agent.nodes import (
-    parse_input_node, search_flights_node, search_hotels_node,
-    check_weather_node, get_pois_node, planner_node,
-    budget_check_node, compile_itinerary_node
-)
+    # 1. Flights
+    flight_data = state.get('selected_flight') or (state.get('flights')[0] if state.get('flights') else None)
+    flight_cost = float(flight_data.get('price_eur', 0) if flight_data else 0)
+    breakdown['flight'] = flight_cost
 
-app = FastAPI(title="TravelDev AI Agent GDS")
+    # 2. Hotels
+    hotel_data = state.get('selected_hotel') or (state.get('hotels')[0] if state.get('hotels') else None)
+    if hotel_data:
+        nightly = float(hotel_data.get('price_per_night_eur', 0))
+        breakdown['hotel'] = nightly * days
+    else:
+        breakdown['hotel'] = 0.0
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://ai-travel-agent-mu.vercel.app", 
-        "http://localhost:5173",
-        "http://127.0.0.1:5173"
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    # 3. Activities
+    act_total = 0.0
+    itinerary = state.get('itinerary', {})
+    if isinstance(itinerary, dict) and 'days' in itinerary:
+        for day in itinerary.get('days', []):
+            for act in day.get('activities', []):
+                act_total += float(act.get('cost_eur', 0))
+    breakdown['activities'] = act_total
 
-def create_initial_state(user_prompt: str, start_date: str = "", end_date: str = "") -> dict:
+    # 4. Meals
+    breakdown['meals'] = float(days * 60.0)
+
+    # 5. Total + Buffer
+    subtotal = sum(breakdown.values())
+    buffer_amt = round(subtotal * 0.10, 2)
+    total_final = subtotal + buffer_amt
+
+    # 6. Budget Check
+    user_limit = float(state.get('budget_usd') or 2000.0)
+
     return {
-        'user_prompt': user_prompt,
-        'current_step': 'start',
-        'destination': "",
-        'origin_city': "",
-        'origin_iata': "",
-        'destination_iata': "",
-        'start_date': start_date, 
-        'end_date': end_date,     
-        'duration_days': 0,
-        'trip_type': "leisure",
-        'search_airport_city': None,
-        'destination_lat': 0.0,
-        'destination_lng': 0.0,
-        'origin_lat': 0.0,
-        'origin_lng': 0.0,
-        'flights': [],
-        'hotels': [],
-        'weather': {},
-        'pois': [],
-        'itinerary': {},
-        'selected_flight': {}, 
-        'selected_hotel': {},  
-        'total_cost_eur': 0,
-        'budget_usd': 2000.0,
-        'within_budget': True,
-        'messages': [],
-        'errors': [],
-        'cost_breakdown': {},
-        'buffer_applied': 0.0
+        'cost_breakdown': breakdown,
+        'total_cost_eur': int(total_final),
+        'within_budget': total_final <= user_limit,
+        'buffer_applied': buffer_amt,
+        'itinerary': itinerary,
+        'selected_flight': flight_data,
+        'selected_hotel': hotel_data
     }
-
-workflow = StateGraph(TripState)
-workflow.add_node("parser", parse_input_node)
-workflow.add_node("fetch_flights", search_flights_node)
-workflow.add_node("fetch_hotels", search_hotels_node)
-workflow.add_node("fetch_weather", check_weather_node) 
-workflow.add_node("fetch_pois", get_pois_node)        
-workflow.add_node("planner", planner_node)
-workflow.add_node("budget_audit", budget_check_node)   
-workflow.add_node("compiler", compile_itinerary_node)
-
-workflow.set_entry_point("parser")
-workflow.add_edge("parser", "fetch_flights")
-workflow.add_edge("fetch_flights", "fetch_hotels")
-workflow.add_edge("fetch_hotels", "fetch_weather")
-workflow.add_edge("fetch_weather", "fetch_pois")
-workflow.add_edge("fetch_pois", "planner")
-workflow.add_edge("planner", "budget_audit")
-workflow.add_edge("budget_audit", "compiler")
-workflow.add_edge("compiler", END)
-
-travel_agent = workflow.compile()
-
-class PlanRequest(BaseModel):
-    prompt: str
-    start_date: Optional[str] = None
-    end_date: Optional[str] = None
-
-@app.post("/plan")
-async def generate_plan(request: PlanRequest):
-    initial_state = create_initial_state(request.prompt, request.start_date or "", request.end_date or "")
-    try:
-        final_state = travel_agent.invoke(initial_state)
-        return final_state
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/health")
-@app.get("/")
-async def root():
-    return {
-        "status": "online", 
-        "agent": "TravelDev GDS v1.0", 
-        "deployment": "Fly.io",
-        "authorized_origin": "https://ai-travel-agent-mu.vercel.app"
-    }
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    uvicorn.run(app, host="0.0.0.0", port=port)

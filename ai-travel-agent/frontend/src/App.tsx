@@ -174,9 +174,30 @@ export default function App() {
 
   const hotelTiers = useMemo(() => itinerary?.hotels || [], [itinerary]);
 
-  const handlePlanTrip = async () => {
+  // --- NEW: LOCATION INTELLIGENCE ---
+  const detectLocation = () => {
+    if (!navigator.geolocation) return;
+    setLoading(true);
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`
+        );
+        const data = await res.json();
+        const city =
+          data.address.city || data.address.town || data.address.state;
+        if (city) setPrompt(`From ${city} to `);
+      } catch (e) {
+        setError("Could not detect location automatically.");
+      } finally {
+        setLoading(false);
+      }
+    });
+  };
+
+  const handlePlanTrip = async (isRegenerate = false) => {
     if (!prompt || prompt.length < 5) {
-      setError("Please describe your journey (e.g. 'Norway to India').");
+      setError("Please describe your journey (e.g. 'London to Dublin').");
       return;
     }
     setLoading(true);
@@ -185,17 +206,25 @@ export default function App() {
       const apiUrl =
         import.meta.env.VITE_API_URL ||
         "https://backend-red-meadow-8440.fly.dev";
+
+      const payload = {
+        prompt: isRegenerate
+          ? `${prompt} (Suggest a different set of activities)`
+          : prompt,
+        start_date: startDate,
+        end_date: endDate || startDate,
+      };
+
       const res = await fetch(`${apiUrl}/plan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt,
-          start_date: startDate,
-          end_date: endDate || startDate,
-        }),
+        body: JSON.stringify(payload),
       });
+
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
+
+      // Check for Backend-defined Intelligence Errors
       if (data.errors && data.errors.length > 0) {
         setError(data.errors[0]);
         setItinerary(null);
@@ -288,10 +317,16 @@ export default function App() {
           <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-[#39D39F] rounded-2xl md:rounded-3xl blur opacity-25" />
           <div className="relative flex flex-col lg:flex-row bg-slate-900/90 backdrop-blur-3xl p-2 rounded-2xl md:rounded-3xl border border-white/10 shadow-2xl items-stretch divide-y lg:divide-y-0 lg:divide-x divide-white/10">
             <div className="flex items-center flex-1 px-4 md:px-6 py-4 md:py-5">
-              <Sparkles size={20} className="text-[#39D39F] mr-3 shrink-0" />
+              <button
+                onClick={detectLocation}
+                title="Detect my location"
+                className="hover:scale-125 transition-transform text-[#39D39F] mr-3 shrink-0"
+              >
+                <Sparkles size={20} />
+              </button>
               <input
                 className="w-full bg-transparent outline-none text-sm font-bold placeholder:text-slate-500"
-                placeholder="Norway to Sweden for 2 days..."
+                placeholder="Where to? (e.g. Ireland to Spain...)"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
               />
@@ -317,14 +352,14 @@ export default function App() {
               </div>
             </div>
             <button
-              onClick={handlePlanTrip}
+              onClick={() => handlePlanTrip(false)}
               className="bg-blue-600 px-8 lg:px-12 py-4 rounded-xl md:rounded-2xl font-black hover:bg-blue-500 transition-all uppercase text-xs m-1 md:m-2"
             >
               PLAN
             </button>
           </div>
           {error && (
-            <p className="text-red-500 bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-xl text-xs mt-4 font-bold">
+            <p className="text-red-500 bg-red-500/10 border border-red-500/20 px-4 py-2 rounded-xl text-xs mt-4 font-bold animate-pulse">
               {error}
             </p>
           )}
@@ -353,17 +388,9 @@ export default function App() {
                       <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest bg-blue-400/10 px-3 py-1 rounded-full border border-blue-400/20">
                         Verified GDS Fare
                       </span>
-                      <a
-                        href={`https://www.google.com/search?q=flights+with+${itinerary.selected_flight?.airline}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block group"
-                      >
-                        <h4 className="text-2xl md:text-5xl font-black text-white mt-4 tracking-tighter uppercase group-hover:text-blue-500 transition-colors">
-                          {itinerary.selected_flight?.airline ||
-                            "Global Carrier"}
-                        </h4>
-                      </a>
+                      <h4 className="text-2xl md:text-5xl font-black text-white mt-4 tracking-tighter uppercase">
+                        {itinerary.selected_flight?.airline || "Global Carrier"}
+                      </h4>
                     </div>
                     <div className="w-full sm:w-auto bg-slate-950/50 p-5 rounded-2xl border border-white/5">
                       <div className="flex justify-between gap-12 mb-4">
@@ -379,7 +406,7 @@ export default function App() {
                           </span>
                         </div>
                         <span className="font-black text-xl">
-                          €{itinerary.selected_flight?.outbound_price || "596"}
+                          €{itinerary.selected_flight?.outbound_price}
                         </span>
                       </div>
                       <div className="w-full h-[1px] bg-white/5 mb-4" />
@@ -396,7 +423,7 @@ export default function App() {
                           </span>
                         </div>
                         <span className="font-black text-xl">
-                          €{itinerary.selected_flight?.return_price || "646"}
+                          €{itinerary.selected_flight?.return_price}
                         </span>
                       </div>
                     </div>
@@ -424,27 +451,18 @@ export default function App() {
                 </h3>
                 <div className="space-y-3">
                   {hotelTiers.map((hotel: any, idx: number) => (
-                    <a
+                    <div
                       key={idx}
-                      href={`https://www.google.com/search?q=${encodeURIComponent(
-                        hotel.name + " " + itinerary.destination
-                      )}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`block p-4 rounded-xl border transition-all hover:scale-[1.02] group ${
+                      className={`p-4 rounded-xl border transition-all ${
                         idx === 0
                           ? "bg-blue-600/20 border-blue-500/50"
                           : "bg-white/5 border-white/10"
                       }`}
                     >
                       <div className="flex justify-between items-start">
-                        <p className="font-bold text-xs md:text-sm line-clamp-1 group-hover:text-blue-400">
+                        <p className="font-bold text-xs md:text-sm line-clamp-1">
                           {hotel.name}
                         </p>
-                        <ArrowRight
-                          size={12}
-                          className="text-slate-600 group-hover:text-white group-hover:translate-x-1"
-                        />
                       </div>
                       <div className="flex justify-between mt-1">
                         <span className="text-[10px] font-black text-blue-400 uppercase">
@@ -455,7 +473,7 @@ export default function App() {
                           <span className="opacity-40">/nt</span>
                         </p>
                       </div>
-                    </a>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -482,9 +500,17 @@ export default function App() {
             </div>
 
             <div className="mt-20 space-y-20">
-              <h3 className="text-2xl md:text-4xl font-black tracking-tight border-b border-white/10 pb-6 italic uppercase flex items-center gap-3">
-                <Clock className="text-blue-500" /> AI Suggested Itinerary
-              </h3>
+              <div className="flex justify-between items-end border-b border-white/10 pb-6 mb-10">
+                <h3 className="text-2xl md:text-4xl font-black tracking-tight italic uppercase flex items-center gap-3">
+                  <Clock className="text-blue-500" /> AI Suggested Itinerary
+                </h3>
+                <button
+                  onClick={() => handlePlanTrip(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-all"
+                >
+                  <Sparkles size={14} className="text-[#39D39F]" /> Regenerate
+                </button>
+              </div>
               {days.map((day: any, i: number) => (
                 <div
                   key={i}
@@ -499,24 +525,9 @@ export default function App() {
                       {day.theme}
                     </h4>
                   </div>
-                  <a
-                    href={`https://www.google.com/maps/search/${encodeURIComponent(
-                      day.theme + " " + itinerary.destination
-                    )}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="relative flex flex-col items-center justify-center w-full h-32 md:h-44 bg-slate-900/80 border border-white/10 rounded-[2rem] mb-10 overflow-hidden group"
-                  >
-                    <div
-                      className="absolute inset-0 opacity-10 group-hover:opacity-20 transition-opacity"
-                      style={{
-                        backgroundImage:
-                          "radial-gradient(#3b82f6 1px, transparent 1px)",
-                        backgroundSize: "30px 30px",
-                      }}
-                    />
+                  <div className="relative flex flex-col items-center justify-center w-full h-32 md:h-44 bg-slate-900/80 border border-white/10 rounded-[2rem] mb-10 overflow-hidden">
                     <div className="relative z-10 flex flex-col items-center gap-3">
-                      <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center">
                         <MapPin size={24} className="text-white" />
                       </div>
                       <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400">
@@ -526,7 +537,7 @@ export default function App() {
                         VIEW DAY {day.day || i + 1} ON INTERACTIVE MAP
                       </h5>
                     </div>
-                  </a>
+                  </div>
                   <div className="grid gap-6">
                     {(day.activities || []).map((act: any, j: number) => (
                       <div

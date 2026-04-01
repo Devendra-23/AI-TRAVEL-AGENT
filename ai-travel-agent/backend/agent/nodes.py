@@ -19,7 +19,7 @@ today_str = datetime.now().strftime("%Y-%m-%d")
 llm = ChatGoogleGenerativeAI(
     model="gemini-1.5-flash", 
     google_api_key=os.getenv("GOOGLE_API_KEY"),
-    temperature=0.1 # Lower temperature for precision parsing
+    temperature=0.1 
 )
 
 # --- UTILITY: DYNAMIC GEOCODING ---
@@ -45,30 +45,45 @@ def clean_json_response(content):
         return content[start:end+1]
     return content
 
-# --- 1. PARSE INPUT (UPGRADED TO LLM) ---
+# --- 1. PARSE INPUT (STRICT EXTRACTION) ---
+# --- 1. PARSE INPUT (HIGH-INTELLIGENCE MAPPING) ---
 def parse_input_node(state: TripState) -> dict:
     text = state['user_prompt']
-    print(f"🧠 [AI BRAIN] Analyzing Prompt: {text}")
+    print(f"🧠 [AI BRAIN] Extracting Intent: {text}")
     
-    # SYSTEM PROMPT: Forces the LLM to extract entities correctly
-    sys_msg = """You are a Travel Data Extractor. 
-    Extract 'origin', 'destination', and 'duration' from the user prompt.
-    - If the user mentions a country (e.g., Ireland), pick its capital or major city (e.g., Dublin).
-    - If no duration is found, default to 3.
+    # SYSTEM PROMPT: Enhanced for "Entity Resolution"
+    sys_msg = """You are a Travel Intelligence Engine. 
+    Your task is to map user intent to specific IATA-compatible cities.
+    - If the user provides a country (Ireland, Spain), map it to the capital city (Dublin, Madrid).
+    - If the user provides a region (Tuscany, Bali), map it to the nearest major international airport city (Florence, Denpasar).
+    - If the prompt is too vague to determine a destination, return an empty string for that field.
     - Return ONLY valid JSON: {"origin": "City", "destination": "City", "duration": 3}"""
     
     try:
         response = llm.invoke([("system", sys_msg), ("user", text)])
         data = json.loads(clean_json_response(response.content))
-        origin = data.get("origin", "London")
-        dest = data.get("destination", "Paris")
+        
+        origin = data.get("origin", "").strip()
+        dest = data.get("destination", "").strip()
         duration = int(data.get("duration", 3))
-    except Exception as e:
-        print(f"⚠️ [PARSER FAIL] Falling back to Regex/Defaults: {e}")
-        origin, dest, duration = "London", "Paris", 3
 
+        # VALIDATION: Check if we actually have a destination
+        if not dest or dest.lower() in ["city", "unknown", ""]:
+            # Instead of Paris, we flag an error in the state
+            return {"errors": ["I couldn't identify your destination. Please try 'From [City] to [City]'."], "current_step": "error"}
+
+    except Exception as e:
+        print(f"⚠️ [EXTRACTION ERROR] {e}")
+        return {"errors": [f"Intelligence failure: {str(e)}"], "current_step": "error"}
+
+    # GEOCODING VALIDATION: Ensure the city actually exists on the map
     o_lat, o_lng = get_coords(origin)
     d_lat, d_lng = get_coords(dest)
+
+    if d_lat == 0.0 and d_lng == 0.0:
+        return {"errors": [f"I found the destination '{dest}', but I can't locate it on a map."], "current_step": "error"}
+
+    print(f"✅ [MAPPED] {origin} -> {dest} ({duration} days)")
 
     return {
         "destination": dest,
@@ -80,7 +95,8 @@ def parse_input_node(state: TripState) -> dict:
         "duration_days": duration,
         "start_date": state.get('start_date') or today_str,
         "end_date": state.get('end_date') or today_str,
-        "current_step": "parsed"
+        "current_step": "parsed",
+        "errors": [] # Clear previous errors
     }
 
 # --- 2. SEARCH FLIGHTS ---
@@ -138,8 +154,9 @@ def planner_node(state: TripState) -> dict:
 
 # --- 7. BUDGET & COMPILATION ---
 def budget_check_node(state: TripState) -> dict:
-    from utils.budget import calculate_total_cost
-    return calculate_total_cost(state)
+    # Use absolute import to solve the Fly.io ImportError
+    import utils.budget as budget_module
+    return budget_module.calculate_total_cost(state)
 
 def compile_itinerary_node(state: TripState) -> dict:
     return {
