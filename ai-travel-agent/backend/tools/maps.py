@@ -1,12 +1,13 @@
 import os
 import requests
+import urllib.parse
 from dotenv import load_dotenv
 
 load_dotenv()
 
 def get_pois(destination: str) -> list:
     """
-    Fetches real-world tourist landmarks using SerpApi Google Engine.
+    Fetches real-world tourist landmarks with functional Google Maps links.
     Prioritizes 'Top Sights' and 'Local Results' for high-fidelity data.
     """
     print(f"🔎 [MAPS] Finding real-world attractions in {destination}...")
@@ -25,47 +26,49 @@ def get_pois(destination: str) -> list:
     }
 
     try:
-        response = requests.get("https://serpapi.com/search", params=params)
+        response = requests.get("https://serpapi.com/search", params=params, timeout=15)
         data = response.json()
         sights = []
         
-        # 1. PRIORITY: 'Top Sights' Carousel (The highest quality landmark list)
+        # 1. PRIORITY: 'Top Sights' Carousel
         if "top_sights" in data:
             for item in data["top_sights"].get("sights", []):
+                name = item.get("title")
+                # Construct a guaranteed search link if 'link' is missing
+                link = item.get("link") or f"https://www.google.com/maps/search/{urllib.parse.quote(name + ' ' + destination)}"
                 sights.append({
-                    "name": item.get("title"),
+                    "name": name,
                     "description": item.get("description", "A premier landmark."),
-                    "rating": item.get("rating", "4.5")
+                    "rating": item.get("rating", "4.5"),
+                    "search_link": link # <--- CRITICAL FOR FRONTEND
                 })
         
-        # 2. SECONDARY: 'Local Results' (Google Maps listings)
+        # 2. SECONDARY: 'Local Results'
         if not sights and "local_results" in data:
             for item in data["local_results"]:
+                name = item.get("title")
+                link = item.get("links", {}).get("directions") or f"https://www.google.com/maps/search/{urllib.parse.quote(name + ' ' + destination)}"
                 sights.append({
-                    "name": item.get("title"),
+                    "name": name,
                     "description": item.get("type", "Popular tourist attraction."),
-                    "rating": item.get("rating", "4.0")
-                })
-        
-        # 3. FALLBACK: Knowledge Graph Sights
-        if not sights and "knowledge_graph" in data:
-            kg_sights = data["knowledge_graph"].get("sights", [])
-            for item in kg_sights:
-                sights.append({
-                    "name": item.get("title"),
-                    "description": "Historic point of interest.",
-                    "rating": "4.5"
+                    "rating": item.get("rating", "4.0"),
+                    "search_link": link
                 })
 
-        # Deduplicate results based on name and limit to top 10
-        unique_sights = {s['name']: s for s in sights}.values()
+        # Deduplicate and limit
+        unique_sights = {s['name']: s for s in sights if s['name']}.values()
         final_list = list(unique_sights)[:10]
 
         if final_list:
-            print(f"✅ [MAPS] Successfully identified {len(final_list)} real POIs.")
             return final_list
             
-        return [{"name": "City Center", "description": "The historic heart of the city.", "rating": "4.0"}]
+        # Hard fallback with link
+        return [{
+            "name": f"{destination} City Center", 
+            "description": "The historic heart.", 
+            "rating": "4.5",
+            "search_link": f"https://www.google.com/maps/search/{urllib.parse.quote(destination + ' City Center')}"
+        }]
 
     except Exception as e:
         print(f"❌ [MAPS ERROR] {e}")

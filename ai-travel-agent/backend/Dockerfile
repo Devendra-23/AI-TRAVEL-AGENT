@@ -13,4 +13,4 @@ COPY . .
 EXPOSE 8080
 
 # Production-grade command using gunicorn manage uvicorn workers
-CMD ["gunicorn", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", "main:app", "--bind", "0.0.0.0:8080", "--timeout", "120"]
+CMD ["gunicorn", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", "main:app", "--bind", "0.0.0.0:8080", "--timeout", "500"]

@@ -3,7 +3,6 @@ import os
 import re
 import requests
 from datetime import datetime
-from langchain_google_genai import ChatGoogleGenerativeAI
 from agent.state import TripState
 from tools.flights import search_flights
 from tools.hotels import search_hotels
@@ -15,28 +14,59 @@ load_dotenv()
 
 today_str = datetime.now().strftime("%Y-%m-%d")
 
-# Initialize Gemini 1.5 Flash 
-llm = ChatGoogleGenerativeAI(
-    model="gemini-1.5-flash", 
-    google_api_key=os.getenv("GOOGLE_API_KEY"),
-    temperature=0.1 
-)
+# --- 1. DIRECT REST API PROXY (BYPASSES ALL LIBRARY ERRORS) ---
+class DirectGemini:
+    """Uses standard requests to ensure we hit the stable V1 production endpoint."""
+    def invoke(self, messages):
+        # Extract prompts from the list format
+        system_instr = messages[0][1] if messages[0][0] == "system" else ""
+        user_prompt = messages[-1][1]
+        
+        api_key = os.getenv("GOOGLE_API_KEY")
+        # FORCE the stable v1 URL - no library can change this
+        url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
+        
+        payload = {
+            "contents": [{
+                "parts": [{"text": f"SYSTEM INSTRUCTIONS:\n{system_instr}\n\nUSER REQUEST:\n{user_prompt}"}]
+            }],
+            "generationConfig": {
+                "temperature": 0.1,
+                "maxOutputTokens": 4096,
+                "responseMimeType": "application/json" # Ensures Gemini returns clean JSON
+            }
+        }
 
-# --- UTILITY: DYNAMIC GEOCODING ---
+        try:
+            response = requests.post(url, json=payload, timeout=90)
+            if response.status_code != 200:
+                print(f"❌ API Error: {response.text}")
+                return type('obj', (object,), {'content': "{}"})
+            
+            data = response.json()
+            ai_text = data['candidates'][0]['content']['parts'][0]['text']
+            
+            # Return an object that has a .content attribute to keep the nodes working
+            return type('obj', (object,), {'content': ai_text})
+        except Exception as e:
+            print(f"❌ REST Request Failed: {e}")
+            return type('obj', (object,), {'content': "{}"})
+
+# Initialize the REST proxy
+llm = DirectGemini()
+
+# --- UTILITY FUNCTIONS ---
 def get_coords(city_name: str):
-    """Fetches real lat/lng for ANY city using OpenStreetMap."""
     try:
         url = f"https://nominatim.openstreetmap.org/search?q={city_name}&format=json&limit=1"
         headers = {'User-Agent': 'TravelDev-Agent-Project'}
         resp = requests.get(url, headers=headers).json()
         if resp:
             return float(resp[0]['lat']), float(resp[0]['lon'])
-    except Exception as e:
-        print(f"🌍 Geocoding error for {city_name}: {e}")
+    except: pass
     return 0.0, 0.0
 
 def clean_json_response(content):
-    """Cleans AI responses to ensure valid JSON parsing."""
     content = str(content)
     content = re.sub(r'```json\s*|\s*```', '', content).strip()
     start = content.find('{')
@@ -45,135 +75,102 @@ def clean_json_response(content):
         return content[start:end+1]
     return content
 
-# --- 1. PARSE INPUT (STRICT EXTRACTION) ---
-# --- 1. PARSE INPUT (HIGH-INTELLIGENCE MAPPING) ---
+# --- 2. NODES ---
+
 def parse_input_node(state: TripState) -> dict:
     text = state['user_prompt']
-    print(f"🧠 [AI BRAIN] Extracting Intent: {text}")
-    
-    # SYSTEM PROMPT: Enhanced for "Entity Resolution"
     sys_msg = """You are a Travel Intelligence Engine. 
-    Your task is to map user intent to specific IATA-compatible cities.
-    - If the user provides a country (Ireland, Spain), map it to the capital city (Dublin, Madrid).
-    - If the user provides a region (Tuscany, Bali), map it to the nearest major international airport city (Florence, Denpasar).
-    - If the prompt is too vague to determine a destination, return an empty string for that field.
-    - Return ONLY valid JSON: {"origin": "City", "destination": "City", "duration": 3}"""
+    Map countries to capital cities. Return ONLY JSON: {"origin": "City", "destination": "City", "duration": 3}"""
     
     try:
         response = llm.invoke([("system", sys_msg), ("user", text)])
         data = json.loads(clean_json_response(response.content))
-        
-        origin = data.get("origin", "").strip()
-        dest = data.get("destination", "").strip()
+        origin, dest = data.get("origin", ""), data.get("destination", "")
         duration = int(data.get("duration", 3))
 
-        # VALIDATION: Check if we actually have a destination
-        if not dest or dest.lower() in ["city", "unknown", ""]:
-            # Instead of Paris, we flag an error in the state
-            return {"errors": ["I couldn't identify your destination. Please try 'From [City] to [City]'."], "current_step": "error"}
+        if not dest: return {"errors": ["No destination found."], "current_step": "error"}
 
+        o_lat, o_lng = get_coords(origin)
+        d_lat, d_lng = get_coords(dest)
+
+        return {
+            "destination": dest, "origin_city": origin,
+            "origin_lat": o_lat, "origin_lng": o_lng,
+            "destination_lat": d_lat, "destination_lng": d_lng,
+            "duration_days": duration, "start_date": state.get('start_date') or today_str,
+            "end_date": state.get('end_date') or today_str, "current_step": "parsed", "errors": [] 
+        }
     except Exception as e:
-        print(f"⚠️ [EXTRACTION ERROR] {e}")
-        return {"errors": [f"Intelligence failure: {str(e)}"], "current_step": "error"}
+        return {"errors": [str(e)], "current_step": "error"}
 
-    # GEOCODING VALIDATION: Ensure the city actually exists on the map
-    o_lat, o_lng = get_coords(origin)
-    d_lat, d_lng = get_coords(dest)
-
-    if d_lat == 0.0 and d_lng == 0.0:
-        return {"errors": [f"I found the destination '{dest}', but I can't locate it on a map."], "current_step": "error"}
-
-    print(f"✅ [MAPPED] {origin} -> {dest} ({duration} days)")
-
-    return {
-        "destination": dest,
-        "origin_city": origin,
-        "origin_lat": o_lat,
-        "origin_lng": o_lng,
-        "destination_lat": d_lat,
-        "destination_lng": d_lng,
-        "duration_days": duration,
-        "start_date": state.get('start_date') or today_str,
-        "end_date": state.get('end_date') or today_str,
-        "current_step": "parsed",
-        "errors": [] # Clear previous errors
-    }
-
-# --- 2. SEARCH FLIGHTS ---
 def search_flights_node(state: TripState) -> dict:
-    flights = search_flights(state['origin_city'], state['destination'], state['start_date'], state['end_date'])
-    return {"flights": flights}
+    return {"flights": search_flights(state['origin_city'], state['destination'], state['start_date'], state['end_date'])}
 
-# --- 3. SEARCH HOTELS ---
 def search_hotels_node(state: TripState) -> dict:
-    hotels = search_hotels(state['destination'], state['duration_days'], state['start_date'], state['end_date'])
-    return {"hotels": hotels}
+    return {"hotels": search_hotels(state['destination'], state['duration_days'], state['start_date'], state['end_date'])}
 
-# --- 4. WEATHER & POIs ---
 def check_weather_node(state: TripState) -> dict:
     return {"weather": check_weather(state['destination'])}
 
 def get_pois_node(state: TripState) -> dict:
     return {"pois": get_pois(state['destination'])}
 
-# --- 6. PLANNER ---
 def planner_node(state: TripState) -> dict:
     dest = state['destination']
     days_count = int(state.get('duration_days', 1))
-    real_pois = state.get('pois', [])
     
-    found_flights = state.get('flights', [])
-    selected_flight = found_flights[0] if found_flights else {
-        "airline": "Global Carrier", "price_eur": 450, "outbound_price": 225, "return_price": 225, "type": "Market Estimate"
-    }
+    flights = state.get('flights', [])
+    hotels = state.get('hotels', [])
+    pois = state.get('pois', [])
     
-    selected_hotel = state.get('hotels')[0] if state.get('hotels') else None
-    poi_list = [p['name'] for p in real_pois] if real_pois else [f"{dest} Center", f"{dest} Old Town"]
+    top_flight = flights[0] if flights else {"airline": "Global Carrier", "price_eur": 450, "booking_url": "#"}
+    top_hotel = hotels[0] if hotels else {"name": "Local Stay", "price_per_night_eur": 120, "booking_url": "#"}
+
+    sys_msg = f"""You are 'Atlas', an elite AI Travel Concierge specialized in {dest}.
+    
+    ### OBJECTIVE:
+    Create a highly logical, {days_count}-day itinerary. Group activities by proximity.
+    
+    ### CONTEXT DATA:
+    - FLIGHT: {top_flight['airline']} at €{top_flight['price_eur']}.
+    - HOTEL: {top_hotel['name']} at €{top_hotel['price_per_night_eur']}/night.
+    - LOCAL SIGHTS: {', '.join([p['name'] for p in pois[:5]])}.
+
+    ### OUTPUT RULES:
+    1. Return ONLY valid JSON. 
+    2. For every activity, include 'name', 'description', 'cost_eur' (int), and 'search_link'.
+    
+    ### JSON STRUCTURE:
+    {{
+      "days": [
+        {{
+          "day": 1,
+          "theme": "Title for the day's vibe",
+          "activities": [
+            {{ "name": "...", "description": "...", "cost_eur": 0, "search_link": "..." }}
+          ]
+        }}
+      ]
+    }}
+    """
+    
+    user_msg = f"Create a {days_count}-day itinerary for {dest}. Use real prices from context."
 
     try:
-        sys_msg = f"You are a Travel API. Return JSON with 'days' array of EXACTLY {days_count} elements."
-        user_msg = f"Plan a {days_count}-day trip to {dest} using: {', '.join(poi_list[:6])}."
         response = llm.invoke([("system", sys_msg), ("user", user_msg)])
         plan = json.loads(clean_json_response(response.content))
     except:
-        manual_days = []
-        for i in range(days_count):
-            day_pois = poi_list[i*2 : (i*2)+2] if i*2 < len(poi_list) else [poi_list[0]]
-            manual_days.append({
-                "day": i + 1,
-                "theme": f"Exploring {dest} - Day {i+1}",
-                "activities": [
-                    {"name": f"Morning visit to {day_pois[0]}", "time": "09:30 AM", "cost_eur": 25},
-                    {"name": f"Lunch in {dest}", "time": "01:00 PM", "cost_eur": 30},
-                    {"name": f"Evening dinner near {day_pois[-1] if len(day_pois)>1 else dest}", "time": "07:30 PM", "cost_eur": 40}
-                ]
-            })
-        plan = {"days": manual_days}
+        plan = {"days": [{"day": 1, "activities": [{"name": f"Explore {dest}", "cost_eur": 0, "search_link": "#"}]}]}
 
-    return {"itinerary": plan, "selected_flight": selected_flight, "selected_hotel": selected_hotel}
+    return {
+        "itinerary": plan, 
+        "selected_flight": top_flight, 
+        "selected_hotel": top_hotel
+    }
 
-# --- 7. BUDGET & COMPILATION ---
 def budget_check_node(state: TripState) -> dict:
-    # Use absolute import to solve the Fly.io ImportError
     import utils.budget as budget_module
     return budget_module.calculate_total_cost(state)
 
 def compile_itinerary_node(state: TripState) -> dict:
-    return {
-        "destination_lat": state.get("destination_lat"),
-        "destination_lng": state.get("destination_lng"),
-        "origin_lat": state.get("origin_lat"),
-        "origin_lng": state.get("origin_lng"),
-        "destination": state.get("destination"),
-        "itinerary": state.get("itinerary"),  
-        "selected_flight": state.get("selected_flight"),
-        "hotels": state.get("hotels", []),
-        "selected_hotel": state.get("selected_hotel"),
-        "total_cost_eur": state.get("total_cost_eur"), 
-        "within_budget": state.get("within_budget"),
-        "cost_breakdown": state.get("cost_breakdown"),
-        "buffer_applied": state.get("buffer_applied"),
-        "start_date": state.get("start_date"),
-        "end_date": state.get("end_date"),
-        "current_step": "final_itinerary"
-    }
+    return {**state, "current_step": "final_itinerary"}
