@@ -165,11 +165,18 @@ export default function App() {
   };
 
   const days = useMemo(() => {
-    if (!itinerary) return [];
-    const base = itinerary.itinerary || itinerary;
-    const list =
-      base.days || base.itinerary?.days || (Array.isArray(base) ? base : []);
-    return Array.isArray(list) ? list : [];
+    if (!itinerary || !itinerary.itinerary) return [];
+
+    // If the backend sent { itinerary: { days: [...] } }
+    const data = itinerary.itinerary;
+    if (data && Array.isArray(data.days)) {
+      return data.days;
+    }
+
+    // Fallback if data is directly an array
+    if (Array.isArray(data)) return data;
+
+    return [];
   }, [itinerary]);
 
   const hotelTiers = useMemo(() => itinerary?.hotels || [], [itinerary]);

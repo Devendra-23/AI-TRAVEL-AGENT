@@ -14,26 +14,27 @@ load_dotenv()
 
 today_str = datetime.now().strftime("%Y-%m-%d")
 
-# --- 1. DIRECT REST API PROXY (BYPASSES ALL LIBRARY ERRORS) ---
+# --- 1. DIRECT REST API PROXY ---
 class DirectGemini:
-    """Uses standard requests to ensure we hit the stable V1 production endpoint."""
+    """Uses standard requests to hit the stable V1 production endpoint directly."""
     def invoke(self, messages):
-        # Extract prompts from the list format
         system_instr = messages[0][1] if messages[0][0] == "system" else ""
         user_prompt = messages[-1][1]
         
         api_key = os.getenv("GOOGLE_API_KEY")
-        # FORCE the stable v1 URL - no library can change this
         url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
         
         payload = {
-            "contents": [{
-                "parts": [{"text": f"SYSTEM INSTRUCTIONS:\n{system_instr}\n\nUSER REQUEST:\n{user_prompt}"}]
-            }],
+            "contents": [
+                {
+                    "role": "user",
+                    "parts": [{"text": f"INSTRUCTIONS: {system_instr}\n\nUSER REQUEST: {user_prompt}"}]
+                }
+            ],
             "generationConfig": {
-                "temperature": 0.1,
+                "temperature": 0.2,
                 "maxOutputTokens": 4096,
-                "responseMimeType": "application/json" # Ensures Gemini returns clean JSON
+                "responseMimeType": "application/json" 
             }
         }
 
@@ -45,17 +46,14 @@ class DirectGemini:
             
             data = response.json()
             ai_text = data['candidates'][0]['content']['parts'][0]['text']
-            
-            # Return an object that has a .content attribute to keep the nodes working
             return type('obj', (object,), {'content': ai_text})
         except Exception as e:
             print(f"❌ REST Request Failed: {e}")
             return type('obj', (object,), {'content': "{}"})
 
-# Initialize the REST proxy
 llm = DirectGemini()
 
-# --- UTILITY FUNCTIONS ---
+# --- UTILITIES ---
 def get_coords(city_name: str):
     try:
         url = f"https://nominatim.openstreetmap.org/search?q={city_name}&format=json&limit=1"
@@ -79,16 +77,17 @@ def clean_json_response(content):
 
 def parse_input_node(state: TripState) -> dict:
     text = state['user_prompt']
-    sys_msg = """You are a Travel Intelligence Engine. 
-    Map countries to capital cities. Return ONLY JSON: {"origin": "City", "destination": "City", "duration": 3}"""
-    
+    sys_msg = "Extract origin, destination, and duration. Return ONLY JSON: {\"origin\": \"City\", \"destination\": \"City\", \"duration\": 3}"
     try:
         response = llm.invoke([("system", sys_msg), ("user", text)])
         data = json.loads(clean_json_response(response.content))
-        origin, dest = data.get("origin", ""), data.get("destination", "")
+        origin = data.get("origin", "London")
+        dest = data.get("destination", "")
         duration = int(data.get("duration", 3))
-
-        if not dest: return {"errors": ["No destination found."], "current_step": "error"}
+        
+        if not dest:
+            words = text.strip().split()
+            dest = words[-1].replace('?', '').capitalize() if words else ""
 
         o_lat, o_lng = get_coords(origin)
         d_lat, d_lng = get_coords(dest)
@@ -123,49 +122,63 @@ def planner_node(state: TripState) -> dict:
     hotels = state.get('hotels', [])
     pois = state.get('pois', [])
     
-    top_flight = flights[0] if flights else {"airline": "Global Carrier", "price_eur": 450, "booking_url": "#"}
-    top_hotel = hotels[0] if hotels else {"name": "Local Stay", "price_per_night_eur": 120, "booking_url": "#"}
+    # Critical: Use existing selection if present, otherwise grab first result
+    top_flight = state.get('selected_flight') or (flights[0] if flights else {"airline": "Global Carrier", "price_eur": 450, "booking_url": "#"})
+    top_hotel = state.get('selected_hotel') or (hotels[0] if hotels else {"name": "Local Stay", "price_per_night_eur": 120, "booking_url": "#"})
 
-    sys_msg = f"""You are 'Atlas', an elite AI Travel Concierge specialized in {dest}.
-    
-    ### OBJECTIVE:
-    Create a highly logical, {days_count}-day itinerary. Group activities by proximity.
-    
-    ### CONTEXT DATA:
-    - FLIGHT: {top_flight['airline']} at €{top_flight['price_eur']}.
-    - HOTEL: {top_hotel['name']} at €{top_hotel['price_per_night_eur']}/night.
-    - LOCAL SIGHTS: {', '.join([p['name'] for p in pois[:5]])}.
+    poi_list = ", ".join([p['name'] for p in pois[:10]]) if pois else "Main attractions"
 
-    ### OUTPUT RULES:
-    1. Return ONLY valid JSON. 
-    2. For every activity, include 'name', 'description', 'cost_eur' (int), and 'search_link'.
+    sys_msg = f"""You are Atlas, a travel AI. Create a {days_count}-day itinerary for {dest}.
+    Landmarks to use: {poi_list}
     
-    ### JSON STRUCTURE:
+    Return ONLY a JSON object.
+    SCHEMA:
     {{
       "days": [
         {{
           "day": 1,
-          "theme": "Title for the day's vibe",
+          "theme": "Creative title",
           "activities": [
-            {{ "name": "...", "description": "...", "cost_eur": 0, "search_link": "..." }}
+            {{ "name": "...", "description": "...", "cost_eur": 15, "search_link": "..." }}
           ]
         }}
       ]
-    }}
-    """
+    }}"""
     
-    user_msg = f"Create a {days_count}-day itinerary for {dest}. Use real prices from context."
+    user_msg = f"JSON Itinerary for {dest}, {days_count} days."
 
     try:
         response = llm.invoke([("system", sys_msg), ("user", user_msg)])
-        plan = json.loads(clean_json_response(response.content))
-    except:
-        plan = {"days": [{"day": 1, "activities": [{"name": f"Explore {dest}", "cost_eur": 0, "search_link": "#"}]}]}
+        raw_plan = json.loads(clean_json_response(response.content))
+        
+        # FORCED STANDARDIZATION:
+        # We ensure 'days' is always the top-level key inside the dictionary
+        if isinstance(raw_plan, dict):
+            if "itinerary" in raw_plan:
+                plan = raw_plan["itinerary"]
+            elif "days" in raw_plan:
+                plan = raw_plan
+            else:
+                plan = {"days": []}
+        else:
+            plan = {"days": []}
 
+    except Exception as e:
+        plan = {"days": [{"day": 1, "theme": "Arrival", "activities": []}]}
+
+    return {
+        "itinerary": plan, # This matches TripState
+        "selected_flight": top_flight, 
+        "selected_hotel": top_hotel,
+        "current_step": "planned"
+    }
+
+    # PERSISTENCE: Returning the selected items ensures budget calculation works
     return {
         "itinerary": plan, 
         "selected_flight": top_flight, 
-        "selected_hotel": top_hotel
+        "selected_hotel": top_hotel,
+        "current_step": "planned"
     }
 
 def budget_check_node(state: TripState) -> dict:
