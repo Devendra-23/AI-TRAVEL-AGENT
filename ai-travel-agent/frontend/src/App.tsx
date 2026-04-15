@@ -286,10 +286,10 @@ export default function App() {
       <div className="fixed top-[60%] md:top-1/2 right-1/2 translate-x-1/2 md:translate-x-0 md:right-[-10%] lg:right-[0%] -translate-y-1/2 pointer-events-none -z-10 opacity-40 md:opacity-60 flex items-center justify-center">
         <TravelGlobe
           key={`${itinerary?.destination || "idle"}`}
-          lat={itinerary?.destination_lat}
-          lng={itinerary?.destination_lng}
-          originLat={itinerary?.origin_lat}
-          originLng={itinerary?.origin_lng}
+          lat={itinerary?.destination_lat} // Matches backend
+          lng={itinerary?.destination_lng} // Matches backend
+          originLat={itinerary?.origin_lat} // Matches backend
+          originLng={itinerary?.origin_lng} // Matches backend
         />
       </div>
 

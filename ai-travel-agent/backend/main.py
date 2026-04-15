@@ -30,38 +30,37 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- 1. STATE INITIALIZATION ---
+# --- 1. STATE INITIALIZATION (Updated main.py) ---
 def create_initial_state(user_prompt: str, start_date: str = "", end_date: str = "") -> dict:
-    """Initializes the dictionary with all keys defined in TripState."""
+    """Initializes the dictionary with the correct structure for TripState."""
     return {
         'user_prompt': user_prompt,
         'current_step': 'start',
         'destination': "",
         'origin_city': "",
-        'origin_iata': "",
-        'destination_iata': "",
+        'origin_iata': None,
+        'destination_iata': None,
         'start_date': start_date, 
         'end_date': end_date,     
-        'duration_days': 0,
+        'duration_days': 1, # Default to 1
         'trip_type': "leisure",
         'search_airport_city': None,
-        'destination_lat': 0.0,
-        'destination_lng': 0.0,
-        'origin_lat': 0.0,
-        'origin_lng': 0.0,
+        'destination_lat': None, # Using None allows nodes to fill them
+        'destination_lng': None,
+        'origin_lat': None,
+        'origin_lng': None,
         'flights': [],
         'hotels': [],
-        'weather': {},
+        'weather': None,
         'pois': [],
-        'itinerary': {},
-        'selected_flight': {}, 
-        'selected_hotel': {},  
+        'itinerary': {"days": []}, # Start with a valid object structure
+        'selected_flight': None, 
+        'selected_hotel': None,  
         'total_cost_eur': 0,
         'budget_usd': 2000.0,
         'within_budget': True,
         'messages': [],
         'errors': [],
-        # --- FIXED: Added missing keys to match updated state.py ---
         'cost_breakdown': {},
         'buffer_applied': 0.0
     }
