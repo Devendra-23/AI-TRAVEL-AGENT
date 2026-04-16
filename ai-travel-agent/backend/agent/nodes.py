@@ -38,23 +38,74 @@ def clean_json_response(content):
     return content[start:end+1] if start != -1 and end != -1 else content
 
 def parse_input_node(state: TripState) -> dict:
-    sys_msg = "Return ONLY JSON: {\"origin\": \"City\", \"destination\": \"City\", \"duration\": 3}"
+    prompt_text = state.get('user_prompt', '')
+    
+    # Stronger Prompt: Tell Gemini explicitly to ignore the duration text
+    sys_msg = """Extract the origin and destination cities. Ignore numbers, dates, or durations.
+    Example 1: 'Dublin to Oslo for 2 days' -> {"origin": "Dublin", "destination": "Oslo"}
+    Example 2: 'Flights from Paris to Rome' -> {"origin": "Paris", "destination": "Rome"}
+    Return ONLY JSON."""
+    
     try:
-        resp = llm.invoke([("system", sys_msg), ("user", state['user_prompt'])])
+        resp = llm.invoke([("system", sys_msg), ("user", prompt_text)])
         data = json.loads(clean_json_response(resp.content))
-        origin, dest = data.get("origin", "Dublin"), data.get("destination", "Madrid")
+        
+        origin = data.get("origin", "").strip()
+        dest = data.get("destination", "").strip()
+        
+        # Python Fallback: Smarter cleanup
+        if origin.lower() in ["city", "", "unknown"] or dest.lower() in ["city", "", "unknown"]:
+            if " to " in prompt_text.lower():
+                parts = prompt_text.lower().split(" to ")
+                origin = parts[0].replace('flights from', '').strip().title()
+                raw_dest = parts[1].replace('?', '').strip().lower()
+                
+                # Chop off "for 2 days" if it exists in the destination string
+                if " for " in raw_dest:
+                    dest = raw_dest.split(" for ")[0].strip().title()
+                else:
+                    dest = raw_dest.title()
+
+        # 1. DYNAMIC DURATION
+        try:
+            start_dt = datetime.strptime(state['start_date'], "%Y-%m-%d")
+            end_dt = datetime.strptime(state['end_date'], "%Y-%m-%d")
+            duration = max(1, (end_dt - start_dt).days)
+        except:
+            duration = 3
+            
+        # 2. SMART ERRORS
+        if not origin or origin.lower() in ["city", "unknown", "none", ""]:
+            return {"errors": ["Please specify your starting city (e.g., 'Dublin to Oslo')."], "current_step": "error"}
+            
+        if not dest or dest.lower() in ["city", "unknown", "none", ""]:
+            return {"errors": ["Please specify your destination (e.g., 'Trip to Norway')."], "current_step": "error"}
+
+        # 3. REALITY CHECK
         o_lat, o_lng = get_coords(origin)
         d_lat, d_lng = get_coords(dest)
         
-        # CRITICAL: Maps variables specifically for the Globe
+        if o_lat == 0.0 and o_lng == 0.0:
+            return {"errors": [f"We couldn't locate the origin city '{origin}'. Check spelling."], "current_step": "error"}
+            
+        if d_lat == 0.0 and d_lng == 0.0:
+            return {"errors": [f"We couldn't locate the destination city '{dest}'. Check spelling."], "current_step": "error"}
+        
+        print(f"🌍 [DYNAMIC ROUTING] {origin} to {dest} for {duration} days.")
+        
         return {
-            "origin_city": origin, "destination": dest, 
-            "origin_lat": o_lat, "origin_lng": o_lng, 
-            "destination_lat": d_lat, "destination_lng": d_lng, 
-            "duration_days": int(data.get("duration", 2)), 
+            "origin_city": origin, 
+            "destination": dest, 
+            "origin_lat": o_lat, 
+            "origin_lng": o_lng, 
+            "destination_lat": d_lat, 
+            "destination_lng": d_lng, 
+            "duration_days": duration, 
             "current_step": "parsed"
         }
-    except: return {"errors": ["Parsing failed"], "current_step": "error"}
+    except Exception as e: 
+        print(f"❌ [PARSE ERROR] {e}")
+        return {"errors": ["Could not understand the route. Try 'Dublin to Oslo'."], "current_step": "error"}
 
 def search_flights_node(state: TripState) -> dict:
     return {"flights": search_flights(state['origin_city'], state['destination'], state['start_date'], state['end_date'])}
@@ -68,20 +119,45 @@ def check_weather_node(state: TripState) -> dict:
 
 def get_pois_node(state: TripState) -> dict:
     return {"pois": get_pois(state['destination'])}
-
 def planner_node(state: TripState) -> dict:
-    flights, hotels = state.get('flights', []), state.get('hotels', [])
-    top_flight = flights[0] if flights else {"airline": "Carrier", "price_eur": 250}
-    top_hotel = hotels[0] if hotels else {"name": "Hotel", "price_per_night_eur": 120}
+    flights, hotels, pois = state.get('flights', []), state.get('hotels', []), state.get('pois', [])
     
-    sys_msg = f"Create a {state['duration_days']}-day JSON itinerary for {state['destination']}. SCHEMA: {{\"days\": [{{\"day\": 1, \"theme\": \"Title\", \"activities\": [{{\"name\": \"...\", \"description\": \"...\", \"cost_eur\": 10}}]}}]}}"
+    top_flight = flights[0] if flights else {"airline": "Global Carrier", "price_eur": 250}
+    top_hotel = hotels[0] if hotels else {"name": "Local Stay", "price_per_night_eur": 120}
+    
+    # Extract real places from your Maps API tool
+    poi_names = ", ".join([p.get('name', '') for p in pois[:15]]) if pois else "top local attractions"
+    
+    # Aggressive Prompt to force real data
+    sys_msg = f"""You are an expert travel agent. Create a realistic {state.get('duration_days', 2)}-day itinerary for {state['destination']}.
+    CRITICAL: You MUST use these real places in your itinerary: {poi_names}.
+    
+    Return ONLY a raw JSON object. NO markdown, NO backticks.
+    SCHEMA:
+    {{
+      "days": [
+        {{
+          "day": 1,
+          "theme": "Exploring History",
+          "activities": [
+            {{ "name": "Real Place Name", "description": "What to do here.", "time": "10:00 AM", "cost_eur": 25 }}
+          ]
+        }}
+      ]
+    }}"""
     
     try:
-        resp = llm.invoke([("system", sys_msg), ("user", f"Plan {state['destination']}")])
+        resp = llm.invoke([("system", sys_msg), ("user", f"Give me the JSON itinerary for {state['destination']}.")])
         plan = json.loads(clean_json_response(resp.content))
+        
         if "itinerary" in plan: plan = plan["itinerary"]
         if "days" not in plan: plan = {"days": plan} if isinstance(plan, list) else {"days": []}
-    except: plan = {"days": []}
+        if len(plan["days"]) == 0: raise ValueError("Empty itinerary")
+            
+    except Exception as e:
+        print(f"❌ [ITINERARY ERROR] {e}")
+        # Keeping the fallback just in case the API goes down
+        plan = {"days": [{"day": 1, "theme": f"Discover {state['destination']}", "activities": [{"name": "City Center Walk", "time": "10:00 AM", "description": "Explore the main squares.", "cost_eur": 0}]}]}
     
     return {
         "itinerary": plan, 
@@ -89,7 +165,6 @@ def planner_node(state: TripState) -> dict:
         "selected_hotel": top_hotel, 
         "current_step": "planned"
     }
-
 def budget_check_node(state: TripState) -> dict:
     import utils.budget as budget_module
     return budget_module.calculate_total_cost(state)

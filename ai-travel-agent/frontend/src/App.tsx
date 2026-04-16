@@ -561,7 +561,21 @@ export default function App() {
                               {act.time}
                             </p>
                             <p className="font-black text-lg md:text-2xl tracking-tighter">
-                              {act.name}
+                              <a
+                                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                                  act.name + " " + itinerary?.destination
+                                )}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-black text-lg md:text-2xl tracking-tighter hover:text-blue-400 hover:underline transition-colors flex items-center gap-2 cursor-pointer"
+                                title="View on Google Maps"
+                              >
+                                {act.name}{" "}
+                                <MapPin
+                                  size={18}
+                                  className="inline-block text-blue-500 opacity-60"
+                                />
+                              </a>
                             </p>
                           </div>
                         </div>
